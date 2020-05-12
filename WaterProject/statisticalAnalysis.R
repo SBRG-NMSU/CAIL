@@ -3,6 +3,7 @@ options(stringsAsFactors = FALSE, scipen = 600)
 oldPar <- par()
 
 library(tidyverse)
+library(ggrepel)
 
 os <- Sys.info()["sysname"]
 baseDir <- ifelse(os == "Windows", "C:/Users/ptrainor/gdrive/", "~/gdrive/")
@@ -17,29 +18,46 @@ load("enviMassOutput_20200509.RData")
 # Set rownames on that data:
 rownames(profs) <- sampleAnno$Name[match(rownames(profs), sampleAnno$ID)]
 
+# Create data.frame with no blanks or "H20+IS samples":
+actSamps <- sampleAnno$Name[sampleAnno$Type == "sample" & sampleAnno$profiled == TRUE]
+aSProfs <- profs[rownames(profs) %in% actSamps,]
+
 # Which are 0:
-which(profs == 0, arr.ind = TRUE)
+which(aSProfs == 0, arr.ind = TRUE)
+
+# Remove all missing:
+misCheckFun <- function(x){
+  if(sum(x == 0) == length(x)){
+    logical1 <- TRUE
+  }else{
+    logical1 <- FALSE
+  }
+  return(logical1)
+}
+aSProfs <- aSProfs[, !apply(aSProfs, 2, misCheckFun)]
 
 # Imputation for missing values:
 impFun <- function(x){
-  x[x == 0] <- min(x[x > 0]) / 2
+  if(sum(x == 0) > 0){
+    x[x == 0] <- min(x[x > 0]) / 2
+  }
   return(x)
 }
-profs <- apply(profs, 2, impFun)
+aSProfs <- apply(aSProfs, 2, impFun)
 
 # Convert to log-scale:
-profs <- log2(profs)
-profs <- scale(profs, center = TRUE, scale = FALSE)
+aSProfs <- log2(aSProfs)
+aSProfs <- scale(aSProfs, center = TRUE, scale = FALSE)
 
 # Entropy filter:
 entropyFun <- function(x) entropy::entropy(entropy::discretize(x, 5), unit = "log2")
-colEntropies <- apply(profs, 2, entropyFun)
+colEntropies <- apply(aSProfs, 2, entropyFun)
 hist(colEntropies)
-profs <- profs[, colEntropies > 1]
+aSProfs <- aSProfs[, colEntropies > 1]
 
-heatmap(profs)
+heatmap(aSProfs)
 
-pca1 <- prcomp(profs)
+pca1 <- prcomp(aSProfs)
 plot(pca1)
 pca1DF <- as.data.frame(pca1$x[, 1:2])
 pca1DF$sampleID <- rownames(pca1DF)

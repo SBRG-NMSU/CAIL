@@ -13,15 +13,6 @@ peaks <- profileList_pos$peaks
 load("./WaterProjectDemo2/results/screening/res_IS_pos_screen")
 load("./WaterProjectDemo2/results/screening/results_screen_IS_pos")
 
-
-results_screen_IS_pos[[6]]
-save.image(file = "enviMassOutput_20200509.RData")
-
-res_IS_pos_screen[[1]]$`1`
-res_IS_pos_screen[[1]]$`2`
-res_IS_pos_screen[[1]]$`3`
-x <- res_IS_pos_screen[[1]]$`8`
-
 getISTD <- function(x){
   x <- x[[1]]
   lNames <- names(x)
@@ -40,5 +31,15 @@ getISTD <- function(x){
   tDF1$file_ID <- x$file_ID
   return(tDF1)
 }
-getISTD(res_IS_pos_screen[[1]]$`3`)
-lapply(res_IS_pos_screen[[1]], getISTD)
+
+iSTDLists <- list()
+for(i in 1:length(res_IS_pos_screen)){
+  temp1 <- do.call("rbind", lapply(res_IS_pos_screen[[i]], getISTD))
+  iSTDLists[[i]] <- temp1
+  if(!is.null(temp1)){
+    iSTDLists[[i]]$iSTD_ID <- names(res_IS_pos_screen)[i]
+  }
+}
+iSTDDF <- do.call("rbind", iSTDLists)
+
+save(peaks, profs, iSTDDF, file = "enviMassOutput_20200509.RData")

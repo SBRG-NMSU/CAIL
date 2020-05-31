@@ -90,6 +90,14 @@ entropyFun <- function(x) entropy::entropy(entropy::discretize(x, 5), unit = "lo
 colEntropies <- apply(aSProfs, 2, entropyFun)
 hist(colEntropies)
 aSProfs <- aSProfs[, colEntropies > 1]
+colEntropies <- as.data.frame(colEntropies)
+
+png(filename = "./Plots/EntropyFilter1.png", height = 3, width = 4, units = "in", res = 600)
+ggplot(colEntropies, aes(x = colEntropies)) + geom_histogram(bins = 35, color = "black", fill = "lightblue") + 
+  geom_vline(xintercept = 1, lty = 2, color = "darkred") + 
+  labs(title = "Shannon entropy of peak intensities", x = "Entropy (Log2)", y = "Frequency") +
+  theme_bw()
+dev.off()
 
 ############ Viz prior to normalization ############
 # Heatmap
@@ -101,9 +109,14 @@ plot(pca1)
 pca1DF <- as.data.frame(pca1$x[, 1:2])
 pca1DF$sampleID <- rownames(pca1DF)
 pca1DF$sampleID <- gsub("90percent_", "", gsub("90per_", "", pca1DF$sampleID))
+pca1DF <- pca1DF %>% left_join(sampleAnno %>% select(Name, Group = tag3), by = c("sampleID" = "Name"))
+
+png(filename = "./Plots/PCA_prior2Norm.png", height = 5.5, width = 8, units = "in", res = 600)
 set.seed(3)
-ggplot(pca1DF, aes(x = PC1, y = PC2, label = sampleID)) + geom_point() + geom_text_repel() + 
-  theme_bw() + labs(title = "PCA prior to normalization")
+ggplot(pca1DF, aes(x = PC1, y = PC2, label = sampleID, color = Group)) + geom_point() + 
+  geom_text_repel(size = 2.75) + theme_bw() + labs(title = "PCA prior to normalization") +
+  theme(plot.title = element_text(hjust = 0.5))
+dev.off()
 
 ########### Intensity distributions ###########
 profs2 <- profs
@@ -115,7 +128,7 @@ profs2$fileName <- factor(profs2$fileName, levels = levels(sampleAnno$Name))
 profs2 <- profs2 %>% gather(key = "profID", value = "intensity", -fileName)
 p1 <- ggplot(profs2, aes(x = fileName, y = log10(intensity))) + geom_boxplot() + 
   geom_hline(yintercept = median(log10(profs2$intensity)), color = "darkblue", lwd = 1) +
-  theme_bw() + theme(axis.text.x = element_text(angle = 90)) + labs(x = "")
+  theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "")
 
 profs3 <- as.data.frame(profs)
 profs3$fileName <- rownames(profs3)
@@ -126,9 +139,19 @@ profs3 <- profs3 %>% group_by(fileName) %>% summarize(profiles = sum(isFound))
 
 p2 <- ggplot(profs3, aes(x = fileName, y = profiles)) + geom_point() + 
   geom_hline(yintercept = median(profs3$profiles), color = "darkred", lwd = 1) +
-  theme_bw() + theme(axis.text.x = element_text(angle = 90)) + labs(x = "")
+  theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "")
 
+png(filename = "./Plots/Intens.png", height = 5, width = 7, units = "in", res = 600)
+p1
+dev.off()
+
+png(filename = "./Plots/PeakCount.png", height = 5, width = 7, units = "in", res = 600)
+p2
+dev.off()
+
+png(filename = "./Plots/IntensPeakCount.png", height = 10, width = 7, units = "in", res = 600)
 gridExtra::grid.arrange(p1, p2, nrow = 2)
+dev.off()
 
 ########### IS-based normalization ###########
 mISTD2 <- mISTD %>% group_by(file_ID, Name) %>% select(file_ID, Name, Intensity) %>% as.data.frame()
@@ -144,17 +167,26 @@ mISTD3$relDiff <- mISTD3$Intensity / mISTD3$Mean
 mISTD4 <- mISTD3 %>% group_by(fileName) %>% summarize(invScale = mean(log10(relDiff)))
 
 p4 <- ggplot(mISTD3, aes(x = Name, y = log10(Intensity), color = grp, group = fileName)) + geom_point() + 
-  geom_line() + theme_bw()
+  geom_line() + theme_bw() + labs(color = "Type")
+
+png(filename = "./Plots/iSTDIntens.png", height = 5, width = 7, units = "in", res = 600)
+p4
+dev.off()
+
 
 # Plot of scaling:
-ggplot(mISTD4, aes(x = fileName, y = invScale)) + geom_point() + theme_bw() +
-  theme(axis.text.x = element_text(angle = 90)) + labs(x = "") 
+png(filename = "./Plots/iSTDsf.png", height = 5, width = 6, units = "in", res = 600)
+ggplot(mISTD4, aes(x = fileName, y = invScale)) + geom_point() + 
+  geom_hline(yintercept = 0, lty = 2, color = "darkred") + theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "", y = "Current Scale") 
+dev.off()
+
 mISTD4$invScale[mISTD4$fileName == "RO_3_2hr"] <- -.4
 ggplot(mISTD4, aes(x = fileName, y = invScale)) + geom_point() + theme_bw() +
   theme(axis.text.x = element_text(angle = 90)) + labs(x = "")
 
 # Scale the data:
-mISTD4$multFactor <- 10^(-mISTD4$invScale*.5)
+mISTD4$multFactor <- 10^(-mISTD4$invScale*.65)
 sProfs <- profs
 for(i in 1:nrow(sProfs)){
   sProfs[i, ] <- sProfs[i, ] * mISTD4$multFactor[match(rownames(sProfs)[i], mISTD4$fileName)]
@@ -163,8 +195,10 @@ for(i in 1:nrow(sProfs)){
 # Scale the internal standards:
 mISTD3 <- mISTD3 %>% left_join(mISTD4, by = "fileName") %>% mutate(Intensity2 = Intensity * multFactor)
 p5 <- ggplot(mISTD3, aes(x = Name, y = log10(Intensity2), color = grp, group = fileName)) + geom_point() + 
-  geom_line() + theme_bw()
+  geom_line() + theme_bw() + labs(color = "Type")
+png(filename = "./Plots/iSTDIntens2.png", height = 9, width = 7, units = "in", res = 600)
 gridExtra::grid.arrange(p4, p5, nrow = 2)
+dev.off()
 
 # Make a new boxplot
 profs2 <- sProfs
@@ -191,11 +225,29 @@ profs2 <- profs2 %>% gather(key = "profID", value = "intensity", -fileName)
 profs2$cycle <- as.integer(str_split(profs2$fileName, "_", simplify = TRUE)[,2])
 profs2$logIntensity <- log10(profs2$intensity)
 
-AE1_TC <- data.frame(profID = unique(profs2$profID), pValue = NA)
+AE1_TC <- data.frame(profID = unique(profs2$profID), slope = NA, pValue = NA)
 for(i in 1:nrow(AE1_TC)){
   lm1 <- lm(logIntensity ~ cycle, data = profs2 %>% filter(profID == AE1_TC$profID[i]))
   coefsLm1 <- coef(summary(lm1))
+  AE1_TC$slope[i] <- coefsLm1["cycle","Estimate"]
   AE1_TC$pValue[i] <- coefsLm1["cycle","Pr(>|t|)"]
 }
+
+ggplot(AE1_TC, aes(x = slope, y = -log10(pValue))) + geom_point()
+
+png(filename = "./Plots/AE1_TC_Volcano.png", height = 7, width = 8, units = "in", res = 600)
+EnhancedVolcano::EnhancedVolcano(AE1_TC, lab = AE1_TC$profID, x = "slope", y = "pValue", pCutoff = .1, 
+                                 FCcutoff = 0.05, xlab = "Slope", legendPosition = "none", caption = "",
+                                 ylim = c(0, 2.5), labSize = 2, title = "", subtitle = "")
+dev.off()
+
+# Specific profiles:
+png(filename = "./Plots/AE1_TC_13176.png", height = 4, width = 5, units = "in", res = 600)
 ggplot(profs2 %>% filter(profID == 13176), aes(x = cycle, y = intensity)) + geom_point() + 
-  geom_line() + theme_bw()
+  stat_smooth(method = "lm") + theme_bw() + 
+  labs(title = "Profile #13176", subtitle = "m/z: 256.19064 (+/-0.17 ppm); RT: 5.1 min",
+       x = "Cycle", y = "Intensity")
+dev.off()
+
+ggplot(profs2 %>% filter(profID == 32071), aes(x = cycle, y = intensity)) + geom_point() + 
+  stat_smooth(method = "lm") + theme_bw()

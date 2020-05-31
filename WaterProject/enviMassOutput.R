@@ -7,6 +7,8 @@ profileList_pos
 
 profs <- enviMass::profiles_to_matrix(profileList_pos)
 peaks <- profileList_pos$peaks
+profInfo <- profileList_pos$index_prof
+
 # peaks3753 <- peaks[peaks[,"profileIDs"] == 3753, ]
 
 # Internal standards:
@@ -42,4 +44,4 @@ for(i in 1:length(res_IS_pos_screen)){
 }
 iSTDDF <- do.call("rbind", iSTDLists)
 
-save(peaks, profs, iSTDDF, file = "enviMassOutput_20200509.RData")
+save(peaks, profs, profInfo, iSTDDF, file = "enviMassOutput_20200509.RData")

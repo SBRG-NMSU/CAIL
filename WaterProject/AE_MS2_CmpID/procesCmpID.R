@@ -10,7 +10,7 @@ library(tidyverse)
 
 ############ Import textfiles ############
 # Annotation data from msp files:
-load("C:/Users/ptrainor/gdrive/CAIL/WaterProject/AE_MS2_CmpID/mspInfo.RData")
+load("mspInfo.RData")
 
 # In Silico:
 inSilico <- read.delim("inSilico_20200530.txt", header = TRUE, sep = "\t")
@@ -23,6 +23,12 @@ formEn <- read.delim("formulaEnumeration_20200530.txt", header = TRUE, sep = "\t
 formEn <- formEn[, !names(formEn) %in% c("File.path", "Title", "MS1.count", "X")]
 colNames1c <- gsub("\\.1", "", colnames(formEn)[grepl("\\.1", colnames(formEn))])
 colNames1d <- c("File.name", "MSMS.count", "PRECURSORMZ", "PRECURSORTYPE")
+
+# Spectral matches:
+spectra <- read.delim("spectralSearch_20200530.txt", header = TRUE, sep = "\t")
+spectra <- spectra[, !names(spectra) %in% c("File.path", "Title", "MS1.count", "X")]
+colNames1e <- gsub("\\.1", "", colnames(spectra)[grepl("\\.1", colnames(spectra))])
+colNames1f <- c("File.name", "MSMS.count", "PRECURSORMZ", "PRECURSORTYPE")
 
 ############ Process in Silico ############
 # In Silico wide to long:

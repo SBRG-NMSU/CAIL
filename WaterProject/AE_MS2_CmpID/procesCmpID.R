@@ -91,4 +91,55 @@ formEn <- formEn %>% select(file = File.name, formula = Formula, Theoretical.mas
                            ontology = Ontology, InChIKey, SMILES),
             by = c("file", "formula"))
 
+# Process for output:
+formEn$RT <- as.numeric(gsub("RETENTIONTIME: ", "", formEn$RT))
+formEn$precursorMZ <- as.numeric(gsub("PRECURSORMZ: ", "", formEn$precursorMZ))
+formEn <- formEn %>% select(file, precursorMZ, RT, adduct, formula, theoreticalMass = Theoretical.mass, massError, 
+                            formulaScore, structure, ontology, structureScore, InChIKey, SMILES, databases)
+# Combined score:
+formEn$combinedScore <- formEn$formulaScore + formEn$structureScore
+
+# File name to feature number:
+formEn$file <- as.integer(gsub("_Unknown", "", formEn$file))
+names(formEn)[names(formEn) == "file"] <- "feature"
+writexl::write_xlsx(formEn, "formEn_20200601.xlsx")
+
 ############ Process spectral matching ############
+# Formula wide to long:
+sList1 <- c("", 1:4)
+spectraTemp2 <- list()
+for(i in 1:length(sList1)){
+  if(i > 1){
+    colNames2 <- paste0(colNames1e, ".", sList1[i])
+  }else{
+    colNames2 <- colNames1e
+  }
+  
+  spectraTemp <- spectra[, (names(spectra) %in% colNames1f | names(spectra) %in% colNames2)]
+  spectraTemp$rank <- i
+  names(spectraTemp) <- gsub("\\.\\d", "", names(spectraTemp))
+  spectraTemp2[[i]] <- spectraTemp
+}
+spectra <- do.call("rbind", spectraTemp2)
+names(spectra)[match(c("Structure.rank", "Total.score"), names(spectra))] <- c("Structure", "StructureScore")
+spectra <- spectra[!spectra$Formula == "",]
+rm(spectraTemp, spectraTemp2, colNames1e, colNames1f, colNames2, i, sList1)
+
+# Process for export:
+# Join with RT and precursor m/z:
+spectra <- df1 %>% right_join(spectra, by = c("file" = "File.name"))
+spectra <- spectra %>% select(file, precursorMZ = PRECURSORMZ, RT = rt, adduct = PRECURSORTYPE, Structure, StructureScore)
+spectra$RT <- as.numeric(gsub("RETENTIONTIME: ", "", spectra$RT))
+spectra <- spectra %>% filter(StructureScore > 0.65)
+
+# File name to feature number:
+spectra$file <- as.integer(gsub("_Unknown", "", spectra$file))
+names(spectra)[names(spectra) == "file"] <- "feature"
+writexl::write_xlsx(spectra, "spectra_20200601.xlsx")
+
+############ Analysis of what is present ############
+formEnTop <- formEn %>% arrange(feature, desc(combinedScore))
+formEnTop <- formEnTop %>% group_by(feature) %>% filter(row_number() == 1)
+ontologyDF <- as.data.frame(table(formEnTop$ontology))
+names(ontologyDF) <- c("Ontology", "Count")
+writexl::write_xlsx(ontologyDF, "ontologyDF.xlsx")

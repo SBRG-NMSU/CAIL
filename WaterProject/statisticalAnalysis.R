@@ -49,6 +49,16 @@ load("enviMassOutput_20200509.RData")
 # Internal standards:
 iSTDs <- readxl::read_excel("iSTDs.xlsx")
 
+# Process profile annotation data:
+profInfo <- as.data.frame(profInfo)
+profInfo$profile_ID <- as.character(as.integer(profInfo$profile_ID))
+
+# Import ID information:
+fenIn <- readxl::read_excel("AE_MS2_CmpID/AE_CmpdID_20200601.xlsx", sheet = "FormulaEn_inSilico")
+fenIn$feature <- as.character(as.integer(fenIn$feature))
+# Unique:
+fenIn2 <- fenIn %>% select(feature, precursorMZ, RT) %>% unique()
+
 ############ Some processing of iSTD data ############
 # Split ID from the enviMass output:
 iSTDDF$iSTD_ID <- gsub("_none_none_none", "", iSTDDF$iSTD_ID)
@@ -92,12 +102,12 @@ hist(colEntropies)
 aSProfs <- aSProfs[, colEntropies > 1]
 colEntropies <- as.data.frame(colEntropies)
 
-png(filename = "./Plots/EntropyFilter1.png", height = 3, width = 4, units = "in", res = 600)
+# png(filename = "./Plots/EntropyFilter1.png", height = 3, width = 4, units = "in", res = 600)
 ggplot(colEntropies, aes(x = colEntropies)) + geom_histogram(bins = 35, color = "black", fill = "lightblue") + 
   geom_vline(xintercept = 1, lty = 2, color = "darkred") + 
   labs(title = "Shannon entropy of peak intensities", x = "Entropy (Log2)", y = "Frequency") +
   theme_bw()
-dev.off()
+# dev.off()
 
 ############ Viz prior to normalization ############
 # Heatmap
@@ -111,12 +121,12 @@ pca1DF$sampleID <- rownames(pca1DF)
 pca1DF$sampleID <- gsub("90percent_", "", gsub("90per_", "", pca1DF$sampleID))
 pca1DF <- pca1DF %>% left_join(sampleAnno %>% select(Name, Group = tag3), by = c("sampleID" = "Name"))
 
-png(filename = "./Plots/PCA_prior2Norm.png", height = 5.5, width = 8, units = "in", res = 600)
+# png(filename = "./Plots/PCA_prior2Norm.png", height = 5.5, width = 8, units = "in", res = 600)
 set.seed(3)
 ggplot(pca1DF, aes(x = PC1, y = PC2, label = sampleID, color = Group)) + geom_point() + 
   geom_text_repel(size = 2.75) + theme_bw() + labs(title = "PCA prior to normalization") +
   theme(plot.title = element_text(hjust = 0.5))
-dev.off()
+# dev.off()
 
 ########### Intensity distributions ###########
 profs2 <- profs
@@ -141,17 +151,17 @@ p2 <- ggplot(profs3, aes(x = fileName, y = profiles)) + geom_point() +
   geom_hline(yintercept = median(profs3$profiles), color = "darkred", lwd = 1) +
   theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "")
 
-png(filename = "./Plots/Intens.png", height = 5, width = 7, units = "in", res = 600)
+# png(filename = "./Plots/Intens.png", height = 5, width = 7, units = "in", res = 600)
 p1
-dev.off()
+# dev.off()
 
-png(filename = "./Plots/PeakCount.png", height = 5, width = 7, units = "in", res = 600)
+# png(filename = "./Plots/PeakCount.png", height = 5, width = 7, units = "in", res = 600)
 p2
-dev.off()
+# dev.off()
 
-png(filename = "./Plots/IntensPeakCount.png", height = 10, width = 7, units = "in", res = 600)
+# png(filename = "./Plots/IntensPeakCount.png", height = 10, width = 7, units = "in", res = 600)
 gridExtra::grid.arrange(p1, p2, nrow = 2)
-dev.off()
+# dev.off()
 
 ########### IS-based normalization ###########
 mISTD2 <- mISTD %>% group_by(file_ID, Name) %>% select(file_ID, Name, Intensity) %>% as.data.frame()
@@ -169,17 +179,17 @@ mISTD4 <- mISTD3 %>% group_by(fileName) %>% summarize(invScale = mean(log10(relD
 p4 <- ggplot(mISTD3, aes(x = Name, y = log10(Intensity), color = grp, group = fileName)) + geom_point() + 
   geom_line() + theme_bw() + labs(color = "Type")
 
-png(filename = "./Plots/iSTDIntens.png", height = 5, width = 7, units = "in", res = 600)
+# png(filename = "./Plots/iSTDIntens.png", height = 5, width = 7, units = "in", res = 600)
 p4
-dev.off()
+# dev.off()
 
 
 # Plot of scaling:
-png(filename = "./Plots/iSTDsf.png", height = 5, width = 6, units = "in", res = 600)
+# png(filename = "./Plots/iSTDsf.png", height = 5, width = 6, units = "in", res = 600)
 ggplot(mISTD4, aes(x = fileName, y = invScale)) + geom_point() + 
   geom_hline(yintercept = 0, lty = 2, color = "darkred") + theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "", y = "Current Scale") 
-dev.off()
+# dev.off()
 
 mISTD4$invScale[mISTD4$fileName == "RO_3_2hr"] <- -.4
 ggplot(mISTD4, aes(x = fileName, y = invScale)) + geom_point() + theme_bw() +
@@ -196,9 +206,9 @@ for(i in 1:nrow(sProfs)){
 mISTD3 <- mISTD3 %>% left_join(mISTD4, by = "fileName") %>% mutate(Intensity2 = Intensity * multFactor)
 p5 <- ggplot(mISTD3, aes(x = Name, y = log10(Intensity2), color = grp, group = fileName)) + geom_point() + 
   geom_line() + theme_bw() + labs(color = "Type")
-png(filename = "./Plots/iSTDIntens2.png", height = 9, width = 7, units = "in", res = 600)
+# png(filename = "./Plots/iSTDIntens2.png", height = 9, width = 7, units = "in", res = 600)
 gridExtra::grid.arrange(p4, p5, nrow = 2)
-dev.off()
+# dev.off()
 
 # Make a new boxplot
 profs2 <- sProfs
@@ -213,6 +223,9 @@ p3 <- ggplot(profs2, aes(x = fileName, y = log10(intensity))) + geom_boxplot() +
   theme_bw() + theme(axis.text.x = element_text(angle = 90)) + labs(x = "")
 
 gridExtra::grid.arrange(p1, p3, nrow = 2)
+
+rm(colEntropies, iSTDCV, iSTDDF, iSTDs, medISTDInt, mISTD, mISTD2, mISTD3, mISTD4, p1, p2, p3, p4, p5,
+   pca1, pca1DF, presentISTD, temp1, actSamps, entropyFun, misCheckFun)
 
 ########### Algal time course ###########
 profs2 <- sProfs[grepl("AE-1", rownames(sProfs)),]
@@ -251,3 +264,31 @@ dev.off()
 
 ggplot(profs2 %>% filter(profID == 32071), aes(x = cycle, y = intensity)) + geom_point() + 
   stat_smooth(method = "lm") + theme_bw()
+
+# Add profile m/z and RT:
+AE1_TC <- AE1_TC %>% left_join(profInfo %>% 
+     select(profile_ID, inBlind = `in_blind?`, mean_int_sample, mean_mz, mean_RT), 
+     by = c("profID" = "profile_ID"))
+
+# Join possible annotation data:
+AE1_TC$posFenIn <- ""
+for(i in 1:nrow(AE1_TC)){
+  pMatch1 <- fenIn2$precursorMZ > AE1_TC$mean_mz[i] - .001 & fenIn2$precursorMZ < AE1_TC$mean_mz[i] + .001
+  pMatch2 <- fenIn2[pMatch1, ]
+  if(nrow(pMatch2) > 0){
+    pMatch3 <- pMatch2$RT > AE1_TC$mean_RT[i] / 60 - .5 & pMatch2$RT < AE1_TC$mean_RT[i] / 60 + .5
+    if(nrow(pMatch2[pMatch3,]) > 0){
+      AE1_TC$posFenIn[i] <- paste(pMatch2$feature[pMatch3], collapse = ";")
+    }
+  }
+}
+
+########### Correlation between profiles ###########
+# Back to wide:
+profs2b <- profs2 %>% select(-intensity, -cycle) %>% spread(key = profID, value = logIntensity)
+rownames(profs2b) <- profs2b$fileName
+profs2b$fileName <- NULL
+profs2bCor <- cor(profs2b)
+heatmap(scale(profs2b))
+
+

@@ -29,10 +29,13 @@ misCheckFun2 <- function(x){
   return(logical1)
 }
 
+# Min non zero half function:
+minNonZero <- function(x) min(x[x > 0]) / 2
+
 # Imputation Function
 impFun <- function(x){
   if(sum(x == 0) > 0){
-    x[x == 0] <- min(x[x > 0]) / 2
+    x[x == 0] <- minNonZero(x)
   }
   return(x)
 }
@@ -224,46 +227,83 @@ p3 <- ggplot(profs2, aes(x = fileName, y = log10(intensity))) + geom_boxplot() +
 
 gridExtra::grid.arrange(p1, p3, nrow = 2)
 
-rm(colEntropies, iSTDCV, iSTDDF, iSTDs, medISTDInt, mISTD, mISTD2, mISTD3, mISTD4, p1, p2, p3, p4, p5,
-   pca1, pca1DF, presentISTD, temp1, actSamps, entropyFun, misCheckFun)
-
-########### Algal time course ###########
-profs2 <- sProfs[grepl("AE-1", rownames(sProfs)),]
-profs2 <- profs2[, !apply(profs2, 2, misCheckFun2)]
-profs2 <- apply(profs2, 2, impFun)
+# And without missing filter or imputation:
+profs2 <- sProfs
 profs2 <- as.data.frame(profs2)
 profs2$fileName <- rownames(profs2)
 profs2$fileName <- factor(profs2$fileName, levels = levels(sampleAnno$Name))
 profs2 <- profs2 %>% gather(key = "profID", value = "intensity", -fileName)
-profs2$cycle <- as.integer(str_split(profs2$fileName, "_", simplify = TRUE)[,2])
-profs2$logIntensity <- log10(profs2$intensity)
 
-AE1_TC <- data.frame(profID = unique(profs2$profID), slope = NA, pValue = NA)
-for(i in 1:nrow(AE1_TC)){
-  lm1 <- lm(logIntensity ~ cycle, data = profs2 %>% filter(profID == AE1_TC$profID[i]))
-  coefsLm1 <- coef(summary(lm1))
-  AE1_TC$slope[i] <- coefsLm1["cycle","Estimate"]
-  AE1_TC$pValue[i] <- coefsLm1["cycle","Pr(>|t|)"]
+rm(colEntropies, iSTDCV, iSTDDF, iSTDs, medISTDInt, mISTD, mISTD2, mISTD3, mISTD4, p1, p2, p3, p4, p5,
+   pca1, pca1DF, presentISTD, temp1, actSamps, entropyFun, misCheckFun)
+
+########### Algal time course SP1 ###########
+# First get data for the profiles by sampling point:
+profs3 <- list()
+for(sp in c("AE-1", "AE-3_4")){
+  if(sp == "AE-3_4"){
+    profs3[[sp]] <- profs2 %>% filter(grepl("AE-3", fileName) | grepl("AE-4", fileName))
+  }else{
+    profs3[[sp]] <- profs2 %>% filter(grepl(sp, fileName))
+  }
+  # Filter for too many zeros:
+  profs3[[sp]] <- profs3[[sp]] %>% group_by(profID) %>% 
+    mutate(countNonZero = sum(intensity > 0), countTotal = n(), 
+           removeIt = ifelse(countNonZero / countTotal < .6, TRUE, FALSE)) %>%
+    ungroup() %>% filter(!removeIt) %>% select(-(countNonZero:removeIt))
+  # Imputation:
+  profs3[[sp]] <- profs3[[sp]] %>% group_by(profID) %>% mutate(mNZ = minNonZero(intensity))
+  profs3[[sp]]$intensity <- ifelse(profs3[[sp]]$intensity > 0, profs3[[sp]]$intensity, profs3[[sp]]$mNZ)
+  profs3[[sp]]$cycle <- as.integer(str_split(profs3[[sp]]$fileName, "_", simplify = TRUE)[,2])
+  profs3[[sp]]$logIntensity <- log10(profs3[[sp]]$intensity)
+  profs3[[sp]]$whichSP <- sp
+  
 }
+profs3 <- do.call("rbind", profs3)
+rownames(profs3) <- NULL
 
-ggplot(AE1_TC, aes(x = slope, y = -log10(pValue))) + geom_point()
+# Make a comparison data.frame based on linear model:
+AE_TCs <- list()
+for(sp in c("AE-1", "AE-3_4")){
+  AE_TC <- data.frame(whichSP = sp, profID = unique(profs3$profID[profs3$whichSP == sp]), slope = NA, pValue = NA)
+  for(i in 1:nrow(AE_TC)){
+    lm1 <- lm(logIntensity ~ cycle, data = profs3 %>% filter(whichSP == sp & profID == AE_TC$profID[i]))
+    coefsLm1 <- coef(summary(lm1))
+    AE_TC$slope[i] <- coefsLm1["cycle","Estimate"]
+    AE_TC$pValue[i] <- coefsLm1["cycle","Pr(>|t|)"]
+  }
+  AE_TCs[[sp]] <- AE_TC
+}
+AE_TCs <- do.call("rbind", AE_TCs)
+AE_TCs$qValue <- qvalue::qvalue(AE_TCs$pValue)$qvalues
 
-png(filename = "./Plots/AE1_TC_Volcano.png", height = 7, width = 8, units = "in", res = 600)
-EnhancedVolcano::EnhancedVolcano(AE1_TC, lab = AE1_TC$profID, x = "slope", y = "pValue", pCutoff = .1, 
+png(filename = paste0("./Plots/AE1_TC_Volcano_",gsub("-", "", Sys.Date()), ".png"), 
+    height = 7, width = 8, units = "in", res = 600)
+EnhancedVolcano::EnhancedVolcano(AE_TCs[AE_TCs$whichSP == "AE-1",], 
+                                 lab = AE_TCs$profID[AE_TCs$whichSP == "AE-1"], x = "slope", y = "pValue", pCutoff = .05, 
+                                 FCcutoff = 0.05, xlab = "Slope", legendPosition = "none", caption = "",
+                                 ylim = c(0, 2.5), labSize = 2, title = "", subtitle = "")
+dev.off()
+png(filename = paste0("./Plots/AE34_TC_Volcano_",gsub("-", "", Sys.Date()), ".png"), 
+    height = 7, width = 8, units = "in", res = 600)
+EnhancedVolcano::EnhancedVolcano(AE_TCs[AE_TCs$whichSP == "AE-3_4",], 
+                                 lab = AE_TCs$profID[AE_TCs$whichSP == "AE-3_4"], x = "slope", y = "pValue", pCutoff = .05, 
                                  FCcutoff = 0.05, xlab = "Slope", legendPosition = "none", caption = "",
                                  ylim = c(0, 2.5), labSize = 2, title = "", subtitle = "")
 dev.off()
 
 # Specific profiles:
 png(filename = "./Plots/AE1_TC_13176.png", height = 4, width = 5, units = "in", res = 600)
-ggplot(profs2 %>% filter(profID == 13176), aes(x = cycle, y = intensity)) + geom_point() + 
+ggplot(profs3 %>% filter(profID == 13176 & whichSP == "AE-1"), aes(x = cycle, y = intensity)) + geom_point() + 
   stat_smooth(method = "lm") + theme_bw() + 
   labs(title = "Profile #13176", subtitle = "m/z: 256.19064 (+/-0.17 ppm); RT: 5.1 min",
        x = "Cycle", y = "Intensity")
 dev.off()
 
-ggplot(profs2 %>% filter(profID == 32071), aes(x = cycle, y = intensity)) + geom_point() + 
-  stat_smooth(method = "lm") + theme_bw()
+ggplot(profs3 %>% filter(profID == 13176), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
+  stat_smooth(method = "lm") + theme_bw() + 
+  labs(title = "Profile #13176", subtitle = "m/z: 256.19064 (+/-0.17 ppm); RT: 5.1 min",
+       x = "Cycle", y = "Intensity")
 
 # Add profile m/z and RT:
 AE1_TC <- AE1_TC %>% left_join(profInfo %>% 

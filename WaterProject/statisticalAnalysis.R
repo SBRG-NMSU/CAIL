@@ -305,6 +305,46 @@ ggplot(profs3 %>% filter(profID == 13176), aes(x = cycle, y = logIntensity, colo
   labs(title = "Profile #13176", subtitle = "m/z: 256.19064 (+/-0.17 ppm); RT: 5.1 min",
        x = "Cycle", y = "Intensity")
 
+ggplot(profs3 %>% filter(profID == 35816), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
+  stat_smooth(method = "lm") + theme_bw() + 
+  labs(title = "Profile #35816", subtitle = "m/z: 459.9263; RT: 8.09 min",
+       x = "Cycle", y = "Intensity")
+
+ggplot(profs3 %>% filter(profID == 26296), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
+  stat_smooth(method = "lm") + theme_bw() + 
+  labs(title = "Profile #26296", subtitle = "m/z: ; RT:  min",
+       x = "Cycle", y = "Intensity")
+
+ggplot(profs3 %>% filter(profID == 8845), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
+  stat_smooth(method = "lm") + theme_bw() + 
+  labs(title = "Profile #8845", subtitle = "m/z: ; RT:  min",
+       x = "Cycle", y = "Intensity")
+
+ggplot(profs3 %>% filter(profID == 2727), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
+  stat_smooth(method = "lm") + theme_bw() + 
+  labs(title = "Profile #2727", subtitle = "m/z: ; RT:  min",
+       x = "Cycle", y = "Intensity")
+
+ggplot(profs3 %>% filter(profID == 22748), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
+  stat_smooth(method = "lm") + theme_bw() + 
+  labs(title = "Profile #22748", subtitle = "m/z: ; RT:  min",
+       x = "Cycle", y = "Intensity")
+
+ggplot(profs3 %>% filter(profID == 35882), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
+  stat_smooth(method = "lm") + theme_bw() + 
+  labs(title = "Profile #35882", subtitle = "m/z: ; RT:  min",
+       x = "Cycle", y = "Intensity")
+
+ggplot(profs3 %>% filter(profID == 489), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
+  stat_smooth(method = "lm") + theme_bw() + 
+  labs(title = "Profile #489", subtitle = "m/z: ; RT:  min",
+       x = "Cycle", y = "Intensity")
+
+ggplot(profs3 %>% filter(profID == 7285), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
+  stat_smooth(method = "lm") + theme_bw() + 
+  labs(title = "Profile #7285", subtitle = "m/z: ; RT:  min",
+       x = "Cycle", y = "Intensity")
+
 # Add profile m/z and RT:
 AE1_TC <- AE1_TC %>% left_join(profInfo %>% 
      select(profile_ID, inBlind = `in_blind?`, mean_int_sample, mean_mz, mean_RT), 

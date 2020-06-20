@@ -57,10 +57,24 @@ profInfo <- as.data.frame(profInfo)
 profInfo$profile_ID <- as.character(as.integer(profInfo$profile_ID))
 
 # Import ID information:
-fenIn <- readxl::read_excel("AE_MS2_CmpID/AE_CmpdID_20200601.xlsx", sheet = "FormulaEn_inSilico")
+fenIn <- readxl::read_excel("AE_MS2_CmpID/AE_CmpdID_20200620.xlsx", sheet = "FormulaEn_inSilico")
 fenIn$feature <- as.character(as.integer(fenIn$feature))
 # Unique:
 fenIn2 <- fenIn %>% select(feature, precursorMZ, RT) %>% unique()
+
+# Import MS/MS data:
+msmsData <- readxl::read_excel("AE_MS2_CmpID/AE_CmpdID_20200620.xlsx", sheet = "peakData")
+
+############ Some processing of MS/MS data ############
+msmsDataTemp1 <- str_split(msmsData$MS2Spectrum, " ")
+procFun0 <- function(x){
+  temp1 <- str_split(x, ":", simplify = TRUE)
+  temp1 <- as.data.frame(temp1)
+  names(temp1) <- c("mz", "intensity")
+  return(temp1)
+}
+s
+lapply(msmsDataTemp1, procFun0)
 
 ############ Some processing of iSTD data ############
 # Split ID from the enviMass output:
@@ -245,7 +259,7 @@ load("working_20200617.RData")
 # First get data for the profiles for AE:
 profs3 <- profs2 %>% filter(grepl("AE-", fileName))
 profs3 <- profs3 %>% group_by(profID) %>% mutate(countNonZero = sum(intensity > 0), countTotal = n(),
-                                       removeIt = ifelse(countNonZero / countTotal < .2, TRUE, FALSE)) %>%
+                                       removeIt = ifelse(countNonZero / countTotal <= .6, TRUE, FALSE)) %>%
   ungroup() %>% filter(!removeIt) %>% select(-(countNonZero:removeIt))
 profs3 <- profs3 %>% group_by(profID) %>% mutate(mNZ = minNonZero(intensity))
 profs3$intensity <- ifelse(profs3$intensity > 0, profs3$intensity, profs3$mNZ)
@@ -275,16 +289,52 @@ for(i in 1:nrow(AE_TC)){
   AE_TC$AE34minAE1p[i] <- as.numeric(summary(emmeans::emmeans(lm1, pairwise ~ whichSP)$contrasts)["p.value"])
   print(i)
 }
+
+# Add profile m/z and RT:
+AE_TC <- AE_TC %>% left_join(profInfo %>% 
+                               select(profile_ID, inBlind = `in_blind?`, mean_int_sample, mean_mz, mean_RT), 
+                             by = c("profID" = "profile_ID")) %>% mutate(lowAbundance = mean_int_sample < 5*10^6)
+
+# Filter out too low abundance:
+AE_TC <- AE_TC %>% filter(!lowAbundance) %>% select(-lowAbundance)
+
 # Adjusted p-values:
 AE_TC$AE34minAE1q <- p.adjust(AE_TC$AE34minAE1p, method = "fdr")
+AE_TC$slope1q <- p.adjust(AE_TC$slope1p, method = "fdr")
 
+# Join possible annotation data:
+AE_TC$posFenIn <- ""
+for(i in 1:nrow(AE_TC)){
+  pMatch1 <- fenIn2$precursorMZ > AE_TC$mean_mz[i] - .001 & fenIn2$precursorMZ < AE_TC$mean_mz[i] + .001
+  pMatch2 <- fenIn2[pMatch1, ]
+  if(nrow(pMatch2) > 0){
+    pMatch3 <- pMatch2$RT > AE_TC$mean_RT[i] / 60 - .5 & pMatch2$RT < AE_TC$mean_RT[i] / 60 + .5
+    if(nrow(pMatch2[pMatch3,]) > 0){
+      AE_TC$posFenIn[i] <- paste(pMatch2$feature[pMatch3], collapse = ";")
+    }
+  }
+}
+
+# Save:
+save.image("working_20200617b.RData")
+load("working_20200617b.RData")
 
 png(filename = paste0("./Plots/AE1_TC_Volcano_",gsub("-", "", Sys.Date()), ".png"), 
     height = 7, width = 8, units = "in", res = 600)
 EnhancedVolcano::EnhancedVolcano(AE_TC, 
-           lab = AE_TC$profID, x = "slope1", y = "slope1p", pCutoff = .05, 
-           FCcutoff = 0.05, xlab = "Slope", legendPosition = "none", caption = "",
-           ylim = c(0, 2.5), labSize = 2, title = "", subtitle = "")
+           lab = AE_TC$profID, x = "slope1", y = "slope1q", pCutoff = .05, 
+           FCcutoff = 0.05, xlab = "Slope", ylab = expression(paste(-log[10],"(Adjusted p-value)")),
+           legendPosition = "none", caption = "", pointSize = 1.25, labSize = 1.25, title = "", subtitle = "",
+           xlim = c(-.15, .15), ylim = c(0, 2.5)) # Add note that one value is not shown with low q-value > 3
+dev.off()
+
+png(filename = paste0("./Plots/AE1_TC_VolcanoNOLab_",gsub("-", "", Sys.Date()), ".png"), 
+    height = 7, width = 8, units = "in", res = 600)
+EnhancedVolcano::EnhancedVolcano(AE_TC, 
+     lab = "", x = "slope1", y = "slope1q", pCutoff = .05, 
+     FCcutoff = 0.05, xlab = "Slope", ylab = expression(paste(-log[10],"(Adjusted p-value)")),
+     legendPosition = "none", caption = "", title = "", subtitle = "",
+     xlim = c(-.15, .15), ylim = c(0, 2.5)) # Add note that one value is not shown with low q-value > 3
 dev.off()
 
 png(filename = paste0("./Plots/AE34minusAE1_Volcano_",gsub("-", "", Sys.Date()), ".png"), 
@@ -292,8 +342,17 @@ png(filename = paste0("./Plots/AE34minusAE1_Volcano_",gsub("-", "", Sys.Date()),
 EnhancedVolcano::EnhancedVolcano(AE_TC, 
      lab = AE_TC$profID, x = "AE34minAE1", y = "AE34minAE1q", pCutoff = .05, 
      FCcutoff = 0.5, xlab = "AE3/4 - AE1", ylab = expression(paste(-log[10],"(Adjusted p-value)")), 
-     legendPosition = "none", caption = "", ylim = c(0, 2.5), xlim = c(-1.5, 1.5), 
-     pointSize = .75, labSize = .75, title = "", subtitle = "")
+     legendPosition = "none", caption = "",  ylim = c(0, 8.5), xlim = c(-2.5, 2.5), 
+     pointSize = .95, labSize = .95, title = "", subtitle = "")
+dev.off()
+
+png(filename = paste0("./Plots/AE34minusAE1_VolcanoNOLab_",gsub("-", "", Sys.Date()), ".png"), 
+    height = 7, width = 8, units = "in", res = 600)
+EnhancedVolcano::EnhancedVolcano(AE_TC, 
+     lab = "", x = "AE34minAE1", y = "AE34minAE1q", pCutoff = .05, 
+     FCcutoff = 0.5, xlab = "AE3/4 - AE1", ylab = expression(paste(-log[10],"(Adjusted p-value)")), 
+     legendPosition = "none", caption = "", ylim = c(0, 8.5), xlim = c(-2.5, 2.5), 
+     title = "", subtitle = "")
 dev.off()
 
 # Specific profiles:
@@ -304,83 +363,25 @@ ggplot(profs3 %>% filter(profID == 13176 & whichSP == "AE-1"), aes(x = cycle, y 
        x = "Cycle", y = "Intensity")
 dev.off()
 png(filename = "./Plots/AE1_TC_13176_Both.png", height = 4, width = 5, units = "in", res = 600)
-ggplot(profs3 %>% filter(profID == 13176), aes(x = cycle, color = whichSP, y = log10(intensity))) + 
+ggplot(profs3 %>% filter(profID == 13176), aes(x = cycle, color = whichSP, y = intensity)) + 
   geom_point() + stat_smooth(method = "lm") + theme_bw() + 
   labs(title = "Profile #13176: AE-1 and AE-3/4", subtitle = "m/z: 256.19064 (+/-0.17 ppm); RT: 5.1 min",
-       x = "Cycle", y = "Intensity")
+       x = "Cycle", y = "Intensity", color = "Sampling\nPoint")
 dev.off()
 png(filename = "./Plots/AE1_TC_13176_Both2.png", height = 4, width = 5, units = "in", res = 600)
 ggplot(profs3 %>% filter(profID == 13176), aes(x = cycle, color = whichSP, y = log10(intensity))) + 
   geom_point() + stat_smooth(method = "lm") + theme_bw() + 
   labs(title = "Profile #13176: AE-1 and AE-3/4 (Log scale)", subtitle = "m/z: 256.19064 (+/-0.17 ppm); RT: 5.1 min",
-       x = "Cycle", y = expression(paste(log[10],"()")))
+       x = "Cycle", y = expression(paste(log[10],"(Intensity)")), color = "Sampling\nPoint")
 dev.off()
-
-
-ggplot(profs3 %>% filter(profID == 35816), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
-  stat_smooth(method = "lm") + theme_bw() + 
-  labs(title = "Profile #35816", subtitle = "m/z: 459.9263; RT: 8.09 min",
-       x = "Cycle", y = "Intensity")
-
-ggplot(profs3 %>% filter(profID == 26296), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
-  stat_smooth(method = "lm") + theme_bw() + 
-  labs(title = "Profile #26296", subtitle = "m/z: ; RT:  min",
-       x = "Cycle", y = "Intensity")
 
 ggplot(profs3 %>% filter(profID == 8845), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
   stat_smooth(method = "lm") + theme_bw() + 
   labs(title = "Profile #8845", subtitle = "m/z: ; RT:  min",
-       x = "Cycle", y = "Intensity")
+       x = "Cycle", y = expression(paste(log[10],"(Intensity)")))
 
-ggplot(profs3 %>% filter(profID == 2727), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
+ggplot(profs3 %>% filter(profID == 28625), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
   stat_smooth(method = "lm") + theme_bw() + 
-  labs(title = "Profile #2727", subtitle = "m/z: ; RT:  min",
-       x = "Cycle", y = "Intensity")
-
-ggplot(profs3 %>% filter(profID == 22748), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
-  stat_smooth(method = "lm") + theme_bw() + 
-  labs(title = "Profile #22748", subtitle = "m/z: ; RT:  min",
-       x = "Cycle", y = "Intensity")
-
-ggplot(profs3 %>% filter(profID == 35882), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
-  stat_smooth(method = "lm") + theme_bw() + 
-  labs(title = "Profile #35882", subtitle = "m/z: ; RT:  min",
-       x = "Cycle", y = "Intensity")
-
-ggplot(profs3 %>% filter(profID == 489), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
-  stat_smooth(method = "lm") + theme_bw() + 
-  labs(title = "Profile #489", subtitle = "m/z: ; RT:  min",
-       x = "Cycle", y = "Intensity")
-
-ggplot(profs3 %>% filter(profID == 7285), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
-  stat_smooth(method = "lm") + theme_bw() + 
-  labs(title = "Profile #7285", subtitle = "m/z: ; RT:  min",
-       x = "Cycle", y = "Intensity")
-
-# Add profile m/z and RT:
-AE1_TC <- AE1_TC %>% left_join(profInfo %>% 
-     select(profile_ID, inBlind = `in_blind?`, mean_int_sample, mean_mz, mean_RT), 
-     by = c("profID" = "profile_ID"))
-
-# Join possible annotation data:
-AE1_TC$posFenIn <- ""
-for(i in 1:nrow(AE1_TC)){
-  pMatch1 <- fenIn2$precursorMZ > AE1_TC$mean_mz[i] - .001 & fenIn2$precursorMZ < AE1_TC$mean_mz[i] + .001
-  pMatch2 <- fenIn2[pMatch1, ]
-  if(nrow(pMatch2) > 0){
-    pMatch3 <- pMatch2$RT > AE1_TC$mean_RT[i] / 60 - .5 & pMatch2$RT < AE1_TC$mean_RT[i] / 60 + .5
-    if(nrow(pMatch2[pMatch3,]) > 0){
-      AE1_TC$posFenIn[i] <- paste(pMatch2$feature[pMatch3], collapse = ";")
-    }
-  }
-}
-
-########### Correlation between profiles ###########
-# Back to wide:
-profs2b <- profs2 %>% select(-intensity, -cycle) %>% spread(key = profID, value = logIntensity)
-rownames(profs2b) <- profs2b$fileName
-profs2b$fileName <- NULL
-profs2bCor <- cor(profs2b)
-heatmap(scale(profs2b))
-
+  labs(title = "Profile #28625", subtitle = "m/z: ; RT:  min",
+       x = "Cycle", y = expression(paste(log[10],"(Intensity)")))
 

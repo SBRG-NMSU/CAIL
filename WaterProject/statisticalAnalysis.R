@@ -64,6 +64,7 @@ fenIn2 <- fenIn %>% select(feature, precursorMZ, RT) %>% unique()
 
 # Import MS/MS data:
 msmsData <- readxl::read_excel("AE_MS2_CmpID/AE_CmpdID_20200620.xlsx", sheet = "peakData")
+msmsData$feature <- as.character(msmsData$feature)
 
 ############ Some processing of MS/MS data ############
 msmsDataTemp1 <- str_split(msmsData$MS2Spectrum, " ")
@@ -71,10 +72,12 @@ procFun0 <- function(x){
   temp1 <- str_split(x, ":", simplify = TRUE)
   temp1 <- as.data.frame(temp1)
   names(temp1) <- c("mz", "intensity")
+  temp1 <- temp1 %>% filter(intensity > 100)
   return(temp1)
 }
-s
-lapply(msmsDataTemp1, procFun0)
+msmsData2 <- lapply(msmsDataTemp1, procFun0)
+names(msmsData2) <- msmsData$feature
+rm(msmsDataTemp1, msmsDataTemp2)
 
 ############ Some processing of iSTD data ############
 # Split ID from the enviMass output:

@@ -183,6 +183,11 @@ p2
 gridExtra::grid.arrange(p1, p2, nrow = 2)
 # dev.off()
 
+########### Quantile deviation normalization ###########
+q95s <- apply(profs, 1, function(x) quantile(x, probs = .95))
+multfactor2 <- 1 / (q95s / median(q95s))
+multfactor2 <- data.frame(fileName = names(multfactor2), multFactor2 = multfactor2)
+
 ########### IS-based normalization ###########
 mISTD2 <- mISTD %>% group_by(file_ID, Name) %>% select(file_ID, Name, Intensity) %>% as.data.frame()
 mISTD2 <- mISTD2 %>% left_join(sampleAnno %>% select(ID, fileName = Name, grp = tag3), by = c("file_ID" = "ID"))
@@ -203,7 +208,6 @@ p4 <- ggplot(mISTD3, aes(x = Name, y = log10(Intensity), color = grp, group = fi
 p4
 # dev.off()
 
-
 # Plot of scaling:
 # png(filename = "./Plots/iSTDsf.png", height = 5, width = 6, units = "in", res = 600)
 ggplot(mISTD4, aes(x = fileName, y = invScale)) + geom_point() + 
@@ -217,6 +221,8 @@ ggplot(mISTD4, aes(x = fileName, y = invScale)) + geom_point() + theme_bw() +
 
 # Scale the data:
 mISTD4$multFactor <- 10^(-mISTD4$invScale*.65)
+mISTD4 <- mISTD4 %>% left_join(multfactor2)
+mISTD4$multFactor <- (mISTD4$multFactor + mISTD4$multFactor2) / 2
 sProfs <- profs
 for(i in 1:nrow(sProfs)){
   sProfs[i, ] <- sProfs[i, ] * mISTD4$multFactor[match(rownames(sProfs)[i], mISTD4$fileName)]
@@ -261,14 +267,29 @@ load("working_20200617.RData")
 
 # First get data for the profiles for AE:
 profs3 <- profs2 %>% filter(grepl("AE-", fileName))
-profs3 <- profs3 %>% group_by(profID) %>% mutate(countNonZero = sum(intensity > 0), countTotal = n(),
-                                       removeIt = ifelse(countNonZero / countTotal <= .6, TRUE, FALSE)) %>%
-  ungroup() %>% filter(!removeIt) %>% select(-(countNonZero:removeIt))
-profs3 <- profs3 %>% group_by(profID) %>% mutate(mNZ = minNonZero(intensity))
-profs3$intensity <- ifelse(profs3$intensity > 0, profs3$intensity, profs3$mNZ)
 profs3$cycle <- as.integer(str_split(profs3$fileName, "_", simplify = TRUE)[,2])
 profs3$logIntensity <- log10(profs3$intensity)
 profs3$whichSP <- ifelse(grepl("AE-3|AE-4", profs3$fileName), "AE-3/4", "AE-1")
+
+# Filter out super missing:
+profs3 %>% select(profID) %>% unique() %>% nrow() # 48,255 profiles
+profs3 <- profs3 %>% group_by(profID) %>% mutate(countNonZero = sum(intensity > 0), countTotal = n(),
+                                                 removeIt = ifelse(countNonZero / countTotal <= .6, TRUE, FALSE)) %>%
+  ungroup() %>% filter(!removeIt) %>% select(-(countNonZero:removeIt))
+profs3 %>% select(profID) %>% unique() %>% nrow() # 1,933 profiles
+
+# Filter out too low abundance: LOH
+profs3 <- profs3 %>% group_by(profID, whichSP) %>% mutate(meanIntByGroup = mean(intensity), 
+     lowAbundanceByGroup = meanIntByGroup < 5*10^6, groupN = n()) %>% ungroup() %>% group_by(profID) %>% 
+     mutate(countLowAbundanceByGroup = sum(lowAbundanceByGroup), tooLow = countLowAbundanceByGroup == groupN) %>%
+  group_by(profID) %>% mutate(removeThis = sum(tooLow) > 0) %>% ungroup() %>% filter(!removeThis) %>%
+  select(-meanIntByGroup, -lowAbundanceByGroup, -groupN, -countLowAbundanceByGroup, -tooLow, -removeThis)
+profs3 %>% select(profID) %>% unique() %>% nrow() # 1,697 profiles
+
+# Imputation
+profs3 <- profs3 %>% group_by(profID) %>% mutate(mNZ = minNonZero(intensity))
+profs3$intensity <- ifelse(profs3$intensity > 0, profs3$intensity, profs3$mNZ)
+profs3$logIntensity <- log10(profs3$intensity)
 
 # Super LM:
 AE_TC <- data.frame(profID = unique(profs3$profID), lrtOverall = NA, slope1 = NA, slope1p = NA,
@@ -295,11 +316,9 @@ for(i in 1:nrow(AE_TC)){
 
 # Add profile m/z and RT:
 AE_TC <- AE_TC %>% left_join(profInfo %>% 
-                               select(profile_ID, inBlind = `in_blind?`, mean_int_sample, mean_mz, mean_RT), 
-                             by = c("profID" = "profile_ID")) %>% mutate(lowAbundance = mean_int_sample < 5*10^6)
+                               select(profile_ID, inBlind = `in_blind?`, mean_mz, mean_RT), 
+                             by = c("profID" = "profile_ID"))
 
-# Filter out too low abundance:
-AE_TC <- AE_TC %>% filter(!lowAbundance) %>% select(-lowAbundance)
 
 # Adjusted p-values:
 AE_TC$AE34minAE1q <- p.adjust(AE_TC$AE34minAE1p, method = "fdr")
@@ -328,7 +347,7 @@ EnhancedVolcano::EnhancedVolcano(AE_TC,
            lab = AE_TC$profID, x = "slope1", y = "slope1q", pCutoff = .05, 
            FCcutoff = 0.05, xlab = "Slope", ylab = expression(paste(-log[10],"(Adjusted p-value)")),
            legendPosition = "none", caption = "", pointSize = 1.25, labSize = 1.25, title = "", subtitle = "",
-           xlim = c(-.15, .15), ylim = c(0, 2.5)) # Add note that one value is not shown with low q-value > 3
+           xlim = c(-.15, .15), ylim = c(0, 3)) # Add note that one value is not shown with low q-value > 3
 dev.off()
 
 png(filename = paste0("./Plots/AE1_TC_VolcanoNOLab_",gsub("-", "", Sys.Date()), ".png"), 
@@ -383,8 +402,7 @@ ggplot(profs3 %>% filter(profID == 8845), aes(x = cycle, y = logIntensity, color
   labs(title = "Profile #8845", subtitle = "m/z: ; RT:  min",
        x = "Cycle", y = expression(paste(log[10],"(Intensity)")))
 
-ggplot(profs3 %>% filter(profID == 28625), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
+ggplot(profs3 %>% filter(profID == 38772), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
   stat_smooth(method = "lm") + theme_bw() + 
-  labs(title = "Profile #28625", subtitle = "m/z: ; RT:  min",
+  labs(title = "Profile #8845", subtitle = "m/z: ; RT:  min",
        x = "Cycle", y = expression(paste(log[10],"(Intensity)")))
-

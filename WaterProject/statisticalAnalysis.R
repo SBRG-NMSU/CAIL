@@ -1,5 +1,5 @@
 ############ Prereqs ############
-options(stringsAsFactors = FALSE, scipen = 600)
+options(stringsAsFactors = FALSE, scipen = 600, max.print = 100000)
 oldPar <- par()
 
 library(tidyverse)
@@ -135,7 +135,6 @@ heatmap(aSProfs)
 
 # PCA
 pca1 <- prcomp(aSProfs)
-plot(pca1)
 pca1DF <- as.data.frame(pca1$x[, 1:2])
 pca1DF$sampleID <- rownames(pca1DF)
 pca1DF$sampleID <- gsub("90percent_", "", gsub("90per_", "", pca1DF$sampleID))
@@ -149,17 +148,19 @@ ggplot(pca1DF, aes(x = PC1, y = PC2, label = sampleID, color = Group)) + geom_po
 # dev.off()
 
 ########### Intensity distributions ###########
+# Profile data wide to long:
 profs2 <- profs
-profs2 <- profs2[, !apply(profs2, 2, misCheckFun2)]
-profs2 <- apply(profs2, 2, impFun)
 profs2 <- as.data.frame(profs2)
 profs2$fileName <- rownames(profs2)
 profs2$fileName <- factor(profs2$fileName, levels = levels(sampleAnno$Name))
 profs2 <- profs2 %>% gather(key = "profID", value = "intensity", -fileName)
+# Filter out missing:
+profs2b <- profs2b %>% filter(intensity > 0)
 p1 <- ggplot(profs2, aes(x = fileName, y = log10(intensity))) + geom_boxplot() + 
   geom_hline(yintercept = median(log10(profs2$intensity)), color = "darkblue", lwd = 1) +
   theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "")
 
+# How many profiles found?
 profs3 <- as.data.frame(profs)
 profs3$fileName <- rownames(profs3)
 profs3$fileName <- factor(profs3$fileName, levels = levels(sampleAnno$Name))
@@ -171,22 +172,24 @@ p2 <- ggplot(profs3, aes(x = fileName, y = profiles)) + geom_point() +
   geom_hline(yintercept = median(profs3$profiles), color = "darkred", lwd = 1) +
   theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "")
 
-# png(filename = "./Plots/Intens.png", height = 5, width = 7, units = "in", res = 600)
+# png(filename = paste0("./Plots/Intens_",gsub("-", "", Sys.Date()), ".png"), 
+#     height = 5, width = 7, units = "in", res = 600)
 p1
 # dev.off()
 
-# png(filename = "./Plots/PeakCount.png", height = 5, width = 7, units = "in", res = 600)
+# png(filename = paste0("./Plots/PeakCount_",gsub("-", "", Sys.Date()), ".png"), 
+#     height = 5, width = 7, units = "in", res = 600)
 p2
 # dev.off()
 
-# png(filename = "./Plots/IntensPeakCount.png", height = 10, width = 7, units = "in", res = 600)
+# png(filename = paste0("./Plots/IntensPeakCount_",gsub("-", "", Sys.Date()), ".png"),
+#     height = 10, width = 7, units = "in", res = 600)
 gridExtra::grid.arrange(p1, p2, nrow = 2)
 # dev.off()
 
-########### Quantile deviation normalization ###########
-q95s <- apply(profs, 1, function(x) quantile(x, probs = .95))
-multfactor2 <- 1 / (q95s / median(q95s))
-multfactor2 <- data.frame(fileName = names(multfactor2), multFactor2 = multfactor2)
+########### Median deviation normalization ###########
+medByFile <- profs2 %>% group_by(fileName) %>% summarize(medInt = median(intensity))
+medNorm <- medByFile %>% mutate(grandMed = median(medInt), medRatio = medInt / grandMed, multFactorDist = 1 / medRatio)
 
 ########### IS-based normalization ###########
 mISTD2 <- mISTD %>% group_by(file_ID, Name) %>% select(file_ID, Name, Intensity) %>% as.data.frame()
@@ -196,40 +199,47 @@ iSTDCV <- mISTD2 %>% group_by(Name, grp) %>% summarize(cv = sd(Intensity) / mean
 # Filter for the four that work (and remove fake QC samples):
 mISTD3 <- mISTD2 %>% filter(Name %in% c(c("Acetaminophen-D4","Atenolol-D7", "Atrazine-D5", "Caffeine-13C3")))
 mISTD3 <- mISTD3 %>% filter(grp != "FALSE")
-medISTDInt <- mISTD3 %>% group_by(Name) %>% summarize(Mean = mean(Intensity, na.rm = TRUE))
-mISTD3 <- mISTD3 %>% left_join(medISTDInt)
-mISTD3$relDiff <- mISTD3$Intensity / mISTD3$Mean
-mISTD4 <- mISTD3 %>% group_by(fileName) %>% summarize(invScale = mean(log10(relDiff)))
+mISTD3 <- mISTD3 %>% group_by(Name) %>% 
+  mutate(medInt = median(Intensity, na.rm = TRUE), medRatio = Intensity / medInt)
+mISTD4 <- mISTD3 %>% group_by(fileName) %>% summarize(medMedRatio = median(medRatio), multFactorISTD = 1 / medMedRatio) 
 
 p4 <- ggplot(mISTD3, aes(x = Name, y = log10(Intensity), color = grp, group = fileName)) + geom_point() + 
   geom_line() + theme_bw() + labs(color = "Type")
 
-# png(filename = "./Plots/iSTDIntens.png", height = 5, width = 7, units = "in", res = 600)
+# png(filename = paste0("./Plots/iSTDIntens_",gsub("-", "", Sys.Date()), ".png"), 
+#     height = 5, width = 7, units = "in", res = 600)
 p4
 # dev.off()
 
 # Plot of scaling:
-# png(filename = "./Plots/iSTDsf.png", height = 5, width = 6, units = "in", res = 600)
-ggplot(mISTD4, aes(x = fileName, y = invScale)) + geom_point() + 
+# png(filename = paste0("./Plots/iSTDsf_",gsub("-", "", Sys.Date()), ".png"),
+#      height = 5, width = 6, units = "in", res = 600)
+ggplot(mISTD4, aes(x = fileName, y = log10(medMedRatio))) + geom_point() + 
   geom_hline(yintercept = 0, lty = 2, color = "darkred") + theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "", y = "Current Scale") 
 # dev.off()
 
-mISTD4$invScale[mISTD4$fileName == "RO_3_2hr"] <- -.4
-ggplot(mISTD4, aes(x = fileName, y = invScale)) + geom_point() + theme_bw() +
-  theme(axis.text.x = element_text(angle = 90)) + labs(x = "")
+# From manual integration:
+mISTD4$medMedRatio[mISTD4$fileName == "RO_3_2hr"] <- 10^(-.25)
+mISTD4$multFactorISTD[mISTD4$fileName == "RO_3_2hr"] <- 1 / mISTD4$medMedRatio[mISTD4$fileName == "RO_3_2hr"]
+
+# Join two normalization df's:
+medNorm <- medNorm %>% left_join(mISTD4)
+
+# iSTD inverse factor:
+ggplot(mISTD4, aes(x = fileName, y = log10(medMedRatio))) + geom_point() + 
+  geom_hline(yintercept = 0, lty = 2, color = "darkred") + theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "", y = "Current Scale") 
 
 # Scale the data:
-mISTD4$multFactor <- 10^(-mISTD4$invScale*.65)
-mISTD4 <- mISTD4 %>% left_join(multfactor2)
-mISTD4$multFactor <- (mISTD4$multFactor + mISTD4$multFactor2) / 2
+medNorm$multFactor <- 10^((log10(medNorm$multFactorISTD) + 3*log10(medNorm$multFactorDist)) / 4)
 sProfs <- profs
 for(i in 1:nrow(sProfs)){
-  sProfs[i, ] <- sProfs[i, ] * mISTD4$multFactor[match(rownames(sProfs)[i], mISTD4$fileName)]
+  sProfs[i, ] <- sProfs[i, ] * medNorm$multFactor[match(rownames(sProfs)[i], medNorm$fileName)]
 }
 
 # Scale the internal standards:
-mISTD3 <- mISTD3 %>% left_join(mISTD4, by = "fileName") %>% mutate(Intensity2 = Intensity * multFactor)
+mISTD3 <- mISTD3 %>% left_join(medNorm, by = "fileName") %>% mutate(Intensity2 = Intensity * multFactor)
 p5 <- ggplot(mISTD3, aes(x = Name, y = log10(Intensity2), color = grp, group = fileName)) + geom_point() + 
   geom_line() + theme_bw() + labs(color = "Type")
 # png(filename = "./Plots/iSTDIntens2.png", height = 9, width = 7, units = "in", res = 600)
@@ -238,24 +248,17 @@ gridExtra::grid.arrange(p4, p5, nrow = 2)
 
 # Make a new boxplot
 profs2 <- sProfs
-profs2 <- profs2[, !apply(profs2, 2, misCheckFun2)]
-profs2 <- apply(profs2, 2, impFun)
 profs2 <- as.data.frame(profs2)
 profs2$fileName <- rownames(profs2)
 profs2$fileName <- factor(profs2$fileName, levels = levels(sampleAnno$Name))
 profs2 <- profs2 %>% gather(key = "profID", value = "intensity", -fileName)
-p3 <- ggplot(profs2, aes(x = fileName, y = log10(intensity))) + geom_boxplot() + 
+# Filter out missing:
+profs2b <- profs2 %>% filter(intensity > 0)
+p3 <- ggplot(profs2b, aes(x = fileName, y = log10(intensity))) + geom_boxplot() + 
   geom_hline(yintercept = median(log10(profs2$intensity)), color = "darkblue", lwd = 1) +
-  theme_bw() + theme(axis.text.x = element_text(angle = 90)) + labs(x = "")
+  theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "")
 
 gridExtra::grid.arrange(p1, p3, nrow = 2)
-
-# And without missing filter or imputation:
-profs2 <- sProfs
-profs2 <- as.data.frame(profs2)
-profs2$fileName <- rownames(profs2)
-profs2$fileName <- factor(profs2$fileName, levels = levels(sampleAnno$Name))
-profs2 <- profs2 %>% gather(key = "profID", value = "intensity", -fileName)
 
 rm(colEntropies, iSTDCV, iSTDDF, iSTDs, medISTDInt, mISTD, mISTD2, mISTD3, mISTD4, p1, p2, p3, p4, p5,
    pca1, pca1DF, presentISTD, temp1, actSamps, entropyFun, misCheckFun)

@@ -155,9 +155,9 @@ profs2$fileName <- rownames(profs2)
 profs2$fileName <- factor(profs2$fileName, levels = levels(sampleAnno$Name))
 profs2 <- profs2 %>% gather(key = "profID", value = "intensity", -fileName)
 # Filter out missing:
-profs2b <- profs2b %>% filter(intensity > 0)
-p1 <- ggplot(profs2, aes(x = fileName, y = log10(intensity))) + geom_boxplot() + 
-  geom_hline(yintercept = median(log10(profs2$intensity)), color = "darkblue", lwd = 1) +
+profs2b <- profs2 %>% filter(intensity > 0)
+p1 <- ggplot(profs2b, aes(x = fileName, y = log10(intensity))) + geom_boxplot() + 
+  geom_hline(yintercept = median(log10(profs2b$intensity)), color = "darkblue", lwd = 1) +
   theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "")
 
 # How many profiles found?
@@ -188,7 +188,7 @@ gridExtra::grid.arrange(p1, p2, nrow = 2)
 # dev.off()
 
 ########### Median deviation normalization ###########
-medByFile <- profs2 %>% group_by(fileName) %>% summarize(medInt = median(intensity))
+medByFile <- profs2b %>% group_by(fileName) %>% summarize(medInt = median(intensity))
 medNorm <- medByFile %>% mutate(grandMed = median(medInt), medRatio = medInt / grandMed, multFactorDist = 1 / medRatio)
 
 ########### IS-based normalization ###########
@@ -255,13 +255,13 @@ profs2 <- profs2 %>% gather(key = "profID", value = "intensity", -fileName)
 # Filter out missing:
 profs2b <- profs2 %>% filter(intensity > 0)
 p3 <- ggplot(profs2b, aes(x = fileName, y = log10(intensity))) + geom_boxplot() + 
-  geom_hline(yintercept = median(log10(profs2$intensity)), color = "darkblue", lwd = 1) +
+  geom_hline(yintercept = median(log10(profs2b$intensity)), color = "darkblue", lwd = 1) +
   theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "")
 
 gridExtra::grid.arrange(p1, p3, nrow = 2)
 
-rm(colEntropies, iSTDCV, iSTDDF, iSTDs, medISTDInt, mISTD, mISTD2, mISTD3, mISTD4, p1, p2, p3, p4, p5,
-   pca1, pca1DF, presentISTD, temp1, actSamps, entropyFun, misCheckFun)
+rm(colEntropies, iSTDCV, iSTDDF, iSTDs, medNorm, mISTD, mISTD2, mISTD3, mISTD4, p1, p2, p3, p4, p5,
+   pca1, pca1DF, presentISTD, temp1, actSamps, entropyFun, misCheckFun, medByFile, profs2b, profs3)
 
 save.image("working_20200617.RData")
 

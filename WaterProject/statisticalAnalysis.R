@@ -263,16 +263,20 @@ gridExtra::grid.arrange(p1, p3, nrow = 2)
 rm(colEntropies, iSTDCV, iSTDDF, iSTDs, medNorm, mISTD, mISTD2, mISTD3, mISTD4, p1, p2, p3, p4, p5,
    pca1, pca1DF, presentISTD, temp1, actSamps, entropyFun, misCheckFun, medByFile, profs2b, profs3)
 
-save.image("working_20200617.RData")
+save.image("working_20200702.RData")
 
 ########### Algal time course ###########
-load("working_20200617.RData")
+load("working_20200702.RData")
 
 # First get data for the profiles for AE:
 profs3 <- profs2 %>% filter(grepl("AE-", fileName))
 profs3$cycle <- as.integer(str_split(profs3$fileName, "_", simplify = TRUE)[,2])
 profs3$logIntensity <- log10(profs3$intensity)
 profs3$whichSP <- ifelse(grepl("AE-3|AE-4", profs3$fileName), "AE-3/4", "AE-1")
+
+# Processing for time-course:
+# 1. Remove profiles not observed in >40% of AE-1, AE-3, and AE-4 samples
+# 2. Remove profiles with average peak area less than 5×10^6 in both AE-1 and AE-3/4
 
 # Filter out super missing:
 profs3 %>% select(profID) %>% unique() %>% nrow() # 48,255 profiles
@@ -281,13 +285,13 @@ profs3 <- profs3 %>% group_by(profID) %>% mutate(countNonZero = sum(intensity > 
   ungroup() %>% filter(!removeIt) %>% select(-(countNonZero:removeIt))
 profs3 %>% select(profID) %>% unique() %>% nrow() # 1,933 profiles
 
-# Filter out too low abundance: LOH
+# Filter out too low abundance: 
 profs3 <- profs3 %>% group_by(profID, whichSP) %>% mutate(meanIntByGroup = mean(intensity), 
      lowAbundanceByGroup = meanIntByGroup < 5*10^6, groupN = n()) %>% ungroup() %>% group_by(profID) %>% 
      mutate(countLowAbundanceByGroup = sum(lowAbundanceByGroup), tooLow = countLowAbundanceByGroup == groupN) %>%
   group_by(profID) %>% mutate(removeThis = sum(tooLow) > 0) %>% ungroup() %>% filter(!removeThis) %>%
   select(-meanIntByGroup, -lowAbundanceByGroup, -groupN, -countLowAbundanceByGroup, -tooLow, -removeThis)
-profs3 %>% select(profID) %>% unique() %>% nrow() # 1,697 profiles
+profs3 %>% select(profID) %>% unique() %>% nrow() # 1,460 profiles
 
 # Imputation
 profs3 <- profs3 %>% group_by(profID) %>% mutate(mNZ = minNonZero(intensity))
@@ -322,7 +326,6 @@ AE_TC <- AE_TC %>% left_join(profInfo %>%
                                select(profile_ID, inBlind = `in_blind?`, mean_mz, mean_RT), 
                              by = c("profID" = "profile_ID"))
 
-
 # Adjusted p-values:
 AE_TC$AE34minAE1q <- p.adjust(AE_TC$AE34minAE1p, method = "fdr")
 AE_TC$slope1q <- p.adjust(AE_TC$slope1p, method = "fdr")
@@ -341,8 +344,8 @@ for(i in 1:nrow(AE_TC)){
 }
 
 # Save:
-save.image("working_20200617b.RData")
-load("working_20200617b.RData")
+# save.image("working_20200617b.RData")
+# load("working_20200617b.RData")
 
 png(filename = paste0("./Plots/AE1_TC_Volcano_",gsub("-", "", Sys.Date()), ".png"), 
     height = 7, width = 8, units = "in", res = 600)

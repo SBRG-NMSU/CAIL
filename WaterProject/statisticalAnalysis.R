@@ -329,6 +329,7 @@ AE_TC <- AE_TC %>% left_join(profInfo %>%
 # Adjusted p-values:
 AE_TC$AE34minAE1q <- p.adjust(AE_TC$AE34minAE1p, method = "fdr")
 AE_TC$slope1q <- p.adjust(AE_TC$slope1p, method = "fdr")
+AE_TC$slope34q <- p.adjust(AE_TC$slope34p, method = "fdr")
 
 # Join possible annotation data:
 AE_TC$posFenIn <- ""
@@ -343,72 +344,131 @@ for(i in 1:nrow(AE_TC)){
   }
 }
 
-# Save:
-# save.image("working_20200617b.RData")
-# load("working_20200617b.RData")
-
-png(filename = paste0("./Plots/AE1_TC_Volcano_",gsub("-", "", Sys.Date()), ".png"), 
-    height = 7, width = 8, units = "in", res = 600)
+# Volcano plots:
+# png(filename = paste0("./Plots/AE1_TC_Volcano_",gsub("-", "", Sys.Date()), ".png"), 
+#     height = 7, width = 8, units = "in", res = 600)
 EnhancedVolcano::EnhancedVolcano(AE_TC, 
            lab = AE_TC$profID, x = "slope1", y = "slope1q", pCutoff = .05, 
            FCcutoff = 0.05, xlab = "Slope", ylab = expression(paste(-log[10],"(Adjusted p-value)")),
            legendPosition = "none", caption = "", pointSize = 1.25, labSize = 1.25, title = "", subtitle = "",
-           xlim = c(-.15, .15), ylim = c(0, 3)) # Add note that one value is not shown with low q-value > 3
-dev.off()
-
-png(filename = paste0("./Plots/AE1_TC_VolcanoNOLab_",gsub("-", "", Sys.Date()), ".png"), 
-    height = 7, width = 8, units = "in", res = 600)
+           xlim = c(-.15, .15), ylim = c(0, 3.5)) 
+# dev.off()
+# png(filename = paste0("./Plots/AE1_TC_VolcanoNOLab_",gsub("-", "", Sys.Date()), ".png"), 
+#     height = 7, width = 8, units = "in", res = 600)
 EnhancedVolcano::EnhancedVolcano(AE_TC, 
      lab = "", x = "slope1", y = "slope1q", pCutoff = .05, 
      FCcutoff = 0.05, xlab = "Slope", ylab = expression(paste(-log[10],"(Adjusted p-value)")),
      legendPosition = "none", caption = "", title = "", subtitle = "",
-     xlim = c(-.15, .15), ylim = c(0, 2.5)) # Add note that one value is not shown with low q-value > 3
-dev.off()
+     xlim = c(-.15, .15), ylim = c(0, 3.5)) 
+# dev.off()
 
-png(filename = paste0("./Plots/AE34minusAE1_Volcano_",gsub("-", "", Sys.Date()), ".png"), 
-    height = 7, width = 8, units = "in", res = 600)
+# png(filename = paste0("./Plots/AE34minusAE1_Volcano_",gsub("-", "", Sys.Date()), ".png"), 
+#     height = 7, width = 8, units = "in", res = 600)
 EnhancedVolcano::EnhancedVolcano(AE_TC, 
      lab = AE_TC$profID, x = "AE34minAE1", y = "AE34minAE1q", pCutoff = .05, 
      FCcutoff = 0.5, xlab = "AE3/4 - AE1", ylab = expression(paste(-log[10],"(Adjusted p-value)")), 
-     legendPosition = "none", caption = "",  ylim = c(0, 8.5), xlim = c(-2.5, 2.5), 
+     legendPosition = "none", caption = "",  ylim = c(0, 6.5), xlim = c(-2.5, 2.5), 
      pointSize = .95, labSize = .95, title = "", subtitle = "")
-dev.off()
-
-png(filename = paste0("./Plots/AE34minusAE1_VolcanoNOLab_",gsub("-", "", Sys.Date()), ".png"), 
-    height = 7, width = 8, units = "in", res = 600)
+# dev.off()
+# png(filename = paste0("./Plots/AE34minusAE1_VolcanoNOLab_",gsub("-", "", Sys.Date()), ".png"), 
+#     height = 7, width = 8, units = "in", res = 600)
 EnhancedVolcano::EnhancedVolcano(AE_TC, 
      lab = "", x = "AE34minAE1", y = "AE34minAE1q", pCutoff = .05, 
      FCcutoff = 0.5, xlab = "AE3/4 - AE1", ylab = expression(paste(-log[10],"(Adjusted p-value)")), 
-     legendPosition = "none", caption = "", ylim = c(0, 8.5), xlim = c(-2.5, 2.5), 
+     legendPosition = "none", caption = "", ylim = c(0, 6.5), xlim = c(-2.5, 2.5), 
      title = "", subtitle = "")
-dev.off()
+# dev.off()
 
 # Specific profiles:
-png(filename = "./Plots/AE1_TC_13176.png", height = 4, width = 5, units = "in", res = 600)
+# png(filename = "./Plots/AE1_TC_13176.png", height = 4, width = 5, units = "in", res = 600)
 ggplot(profs3 %>% filter(profID == 13176 & whichSP == "AE-1"), aes(x = cycle, y = intensity)) + geom_point() + 
   stat_smooth(method = "lm") + theme_bw() + 
   labs(title = "Profile #13176: AE-1 Only", subtitle = "m/z: 256.19064 (+/-0.17 ppm); RT: 5.1 min",
        x = "Cycle", y = "Intensity")
-dev.off()
-png(filename = "./Plots/AE1_TC_13176_Both.png", height = 4, width = 5, units = "in", res = 600)
+# dev.off()
+# png(filename = "./Plots/AE1_TC_13176_Both.png", height = 4, width = 5.5, units = "in", res = 600)
 ggplot(profs3 %>% filter(profID == 13176), aes(x = cycle, color = whichSP, y = intensity)) + 
   geom_point() + stat_smooth(method = "lm") + theme_bw() + 
   labs(title = "Profile #13176: AE-1 and AE-3/4", subtitle = "m/z: 256.19064 (+/-0.17 ppm); RT: 5.1 min",
        x = "Cycle", y = "Intensity", color = "Sampling\nPoint")
-dev.off()
-png(filename = "./Plots/AE1_TC_13176_Both2.png", height = 4, width = 5, units = "in", res = 600)
+# dev.off()
+# png(filename = "./Plots/AE1_TC_13176_Both2.png", height = 4, width = 5.5, units = "in", res = 600)
 ggplot(profs3 %>% filter(profID == 13176), aes(x = cycle, color = whichSP, y = log10(intensity))) + 
   geom_point() + stat_smooth(method = "lm") + theme_bw() + 
   labs(title = "Profile #13176: AE-1 and AE-3/4 (Log scale)", subtitle = "m/z: 256.19064 (+/-0.17 ppm); RT: 5.1 min",
        x = "Cycle", y = expression(paste(log[10],"(Intensity)")), color = "Sampling\nPoint")
-dev.off()
+# dev.off()
 
 ggplot(profs3 %>% filter(profID == 8845), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
   stat_smooth(method = "lm") + theme_bw() + 
   labs(title = "Profile #8845", subtitle = "m/z: ; RT:  min",
        x = "Cycle", y = expression(paste(log[10],"(Intensity)")))
 
-ggplot(profs3 %>% filter(profID == 38772), aes(x = cycle, y = logIntensity, color = whichSP)) + geom_point() + 
-  stat_smooth(method = "lm") + theme_bw() + 
-  labs(title = "Profile #8845", subtitle = "m/z: ; RT:  min",
-       x = "Cycle", y = expression(paste(log[10],"(Intensity)")))
+# Export time-course data:
+writexl::write_xlsx(AE_TC, path = paste0("Results/AE_Timecourse_", gsub("-", "", Sys.Date()), ".xlsx"))
+
+rm(lm0, lm1, p1, p2, p3, p4, p5, pca1, pca1DF, pMatch2, temp1, temp2, temp3, colEntropies,
+   iSTDCV, iSTDDF, iSTDs, medByFile, medNorm, mISTD, mISTD2, mISTD3, mISTD4, profs2b, 
+   pMatch1, pMatch3, i, profs3)
+
+# Save:
+save.image("working_20200702b.RData")
+
+########### Algal present versus absent ###########
+load("working_20200702b.RData")
+
+# First get data for the profiles for AE:
+profs3 <- profs2 %>% filter(grepl("AE-", fileName))
+profs3$cycle <- as.integer(str_split(profs3$fileName, "_", simplify = TRUE)[,2])
+profs3$logIntensity <- log10(profs3$intensity)
+profs3$whichSP <- ifelse(grepl("AE-3|AE-4", profs3$fileName), "AE-3/4", "AE-1")
+
+# Add indicator for absent, intermediate, present:
+profs3 <- profs3 %>% mutate(pres = case_when(intensity == 0 ~ "Absent", intensity > 5*10^6 ~ "Present", 
+                                             TRUE ~ "Intermediate"))
+profs3$pres <- factor(profs3$pres, levels = c("Absent", "Intermediate", "Present"), ordered = TRUE)
+
+# Remove those absent in all:
+# Starting count:
+profs3 %>% select(profID) %>% unique() %>% nrow() # 48,255
+profs3 <- profs3 %>% group_by(profID) %>% mutate(countPresent = sum(pres == "Present"), 
+           removeThis = countPresent == 0) %>% filter(!removeThis) %>% select(-countPresent, -removeThis)
+profs3 %>% select(profID) %>% unique() %>% nrow() # 12,236
+
+AE_Pres <- data.frame(profID = unique(profs3$profID), lrtOverall = NA)
+for(i in 1:nrow(AE_Pres)){
+  temp1 <- profs3 %>% filter(profID == AE_Pres$profID[i])
+  ordLogistic0 <- MASS::polr(pres ~ 1, data = temp1)
+  ordLogistic1 <- MASS::polr(pres ~ whichSP, data = temp1)
+  AE_Pres$lrtOverall[i] <- anova(ordLogistic0, ordLogistic1)$`Pr(Chi)`[2]
+  print(i)
+}
+
+# Adjusted p-values:
+AE_Pres$lrtOverallq <- p.adjust(AE_Pres$lrtOverall, method = "fdr")
+
+# Add profile m/z and RT:
+AE_Pres <- AE_Pres %>% left_join(profInfo %>% 
+                               select(profile_ID, inBlind = `in_blind?`, mean_mz, mean_RT), 
+                             by = c("profID" = "profile_ID"))
+
+# Join possible annotation data:
+AE_Pres$posFenIn <- ""
+for(i in 1:nrow(AE_Pres)){
+  pMatch1 <- fenIn2$precursorMZ > AE_Pres$mean_mz[i] - .001 & fenIn2$precursorMZ < AE_Pres$mean_mz[i] + .001
+  pMatch2 <- fenIn2[pMatch1, ]
+  if(nrow(pMatch2) > 0){
+    pMatch3 <- pMatch2$RT > AE_Pres$mean_RT[i] / 60 - .5 & pMatch2$RT < AE_Pres$mean_RT[i] / 60 + .5
+    if(nrow(pMatch2[pMatch3,]) > 0){
+      AE_Pres$posFenIn[i] <- paste(pMatch2$feature[pMatch3], collapse = ";")
+    }
+  }
+}
+
+png(filename = "./Plots/AE_Present_4988.png", height = 5, width = 6, units = "in", res = 600)
+set.seed(3)
+ggplot(profs3 %>% filter(profID == 4988), aes(x = whichSP, color = whichSP, y = intensity, label = fileName)) + 
+  geom_point() + geom_text_repel() + theme_bw() + 
+  labs(title = "Profile #4988: AE-1 and AE-3/4", subtitle = "m/z: 182.0093; RT: 9.34 min",
+       x = "Sampling Point", y = "Intensity", color = "Sampling\nPoint")
+dev.off()

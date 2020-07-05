@@ -44,4 +44,4 @@ for(i in 1:length(res_IS_pos_screen)){
 }
 iSTDDF <- do.call("rbind", iSTDLists)
 
-save(peaks, profs, profInfo, iSTDDF, file = "enviMassOutput_20200705.RData")
+save(peaks, profs, profInfo, iSTDDF, file = "RData/enviMassOutput_20200705.RData")

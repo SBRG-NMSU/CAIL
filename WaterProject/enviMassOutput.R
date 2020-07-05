@@ -2,7 +2,7 @@ library(enviMass)
 setwd("C:/Users/ptrainor/gdrive/CAIL/WaterProject")
 
 # Import profile data from enviMass results:
-load_profileList("./WaterProjectDemo2/results/profileList_pos")
+load_profileList("./WaterProjectDemo3/results/profileList_pos")
 profileList_pos
 
 profs <- enviMass::profiles_to_matrix(profileList_pos)
@@ -12,8 +12,8 @@ profInfo <- profileList_pos$index_prof
 # peaks3753 <- peaks[peaks[,"profileIDs"] == 3753, ]
 
 # Internal standards:
-load("./WaterProjectDemo2/results/screening/res_IS_pos_screen")
-load("./WaterProjectDemo2/results/screening/results_screen_IS_pos")
+load("./WaterProjectDemo3/results/screening/res_IS_pos_screen")
+load("./WaterProjectDemo3/results/screening/results_screen_IS_pos")
 
 getISTD <- function(x){
   x <- x[[1]]
@@ -44,4 +44,4 @@ for(i in 1:length(res_IS_pos_screen)){
 }
 iSTDDF <- do.call("rbind", iSTDLists)
 
-save(peaks, profs, profInfo, iSTDDF, file = "enviMassOutput_20200509.RData")
+save(peaks, profs, profInfo, iSTDDF, file = "enviMassOutput_20200705.RData")

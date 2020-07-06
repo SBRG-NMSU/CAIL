@@ -443,11 +443,13 @@ for(i in 1:nrow(AE_Pres)){
   temp2 <- as.data.frame(xtabs(~whichSP + pres, data = temp1)) 
   temp2$pres <- paste0(temp2$pres, "_", temp2$whichSP)
   temp2 <- temp2 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
+  names(temp2) <- paste0(names(temp2), "_Freq")
   
   # Tabulate proportions:
-  temp3 <- as.data.frame(prop.table(xtabs(~whichSP + pres, data = temp1)))
+  temp3 <- as.data.frame(prop.table(xtabs(~whichSP + pres, data = temp1), margin = 1))
   temp3$pres <- paste0(temp3$pres, "_", temp3$whichSP)
   temp3 <- temp3 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
+  names(temp3) <- paste0(names(temp3), "_Prop")
   
   # Ordinal logistic regression:
   ordLogistic0 <- MASS::polr(pres ~ 1, data = temp1)
@@ -458,6 +460,8 @@ for(i in 1:nrow(AE_Pres)){
   AE_Pres2[[i]] <- cbind(profID = AE_Pres$profID[i], temp2, temp3)
   print(i)
 }
+AE_Pres2 <- do.call("rbind", AE_Pres2)
+AE_Pres <- AE_Pres %>% left_join(AE_Pres2)
 
 # Adjusted p-values:
 AE_Pres$lrtOverallq <- p.adjust(AE_Pres$lrtOverall, method = "fdr")

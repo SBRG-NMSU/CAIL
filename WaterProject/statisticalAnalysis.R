@@ -434,11 +434,28 @@ profs3 <- profs3 %>% group_by(profID) %>% mutate(countPresent = sum(pres == "Pre
 profs3 %>% select(profID) %>% unique() %>% nrow() # 10,744
 
 AE_Pres <- data.frame(profID = unique(profs3$profID), lrtOverall = NA)
+AE_Pres2 <- list()
 for(i in 1:nrow(AE_Pres)){
+  # Find all intensity for an individual feature:
   temp1 <- profs3 %>% filter(profID == AE_Pres$profID[i])
+  
+  # Tabulate present vs. absent:
+  temp2 <- as.data.frame(xtabs(~whichSP + pres, data = temp1)) 
+  temp2$pres <- paste0(temp2$pres, "_", temp2$whichSP)
+  temp2 <- temp2 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
+  
+  # Tabulate proportions:
+  temp3 <- as.data.frame(prop.table(xtabs(~whichSP + pres, data = temp1)))
+  temp3$pres <- paste0(temp3$pres, "_", temp3$whichSP)
+  temp3 <- temp3 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
+  
+  # Ordinal logistic regression:
   ordLogistic0 <- MASS::polr(pres ~ 1, data = temp1)
   ordLogistic1 <- MASS::polr(pres ~ whichSP, data = temp1)
+  
+  # Eports:
   AE_Pres$lrtOverall[i] <- anova(ordLogistic0, ordLogistic1)$`Pr(Chi)`[2]
+  AE_Pres2[[i]] <- cbind(profID = AE_Pres$profID[i], temp2, temp3)
   print(i)
 }
 
@@ -463,10 +480,13 @@ for(i in 1:nrow(AE_Pres)){
   }
 }
 
-png(filename = "./Plots/AE_Present_5464.png", height = 5, width = 6, units = "in", res = 600)
+# png(filename = "./Plots/AE_Present_5464.png", height = 5, width = 6, units = "in", res = 600)
 set.seed(3)
 ggplot(profs3 %>% filter(profID == 5464), aes(x = whichSP, color = whichSP, y = intensity, label = fileName)) + 
   geom_point() + geom_text_repel() + theme_bw() + 
   labs(title = "Profile #5464: AE-1 and AE-3/4", subtitle = "m/z: 182.0093; RT: 9.34 min",
        x = "Sampling Point", y = "Intensity", color = "Sampling\nPoint")
-dev.off()
+# dev.off()
+
+########### Secondary effluent to Product water ###########
+

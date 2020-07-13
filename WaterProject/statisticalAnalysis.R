@@ -1,4 +1,5 @@
 ############ Prereqs ############
+# Begin always run
 options(stringsAsFactors = FALSE, scipen = 600, max.print = 100000)
 oldPar <- par()
 
@@ -8,6 +9,7 @@ library(ggrepel)
 os <- Sys.info()["sysname"]
 baseDir <- ifelse(os == "Windows", "C:/Users/ptrainor/gdrive/", "~/gdrive/")
 setwd(paste0(baseDir, "CAIL/WaterProject"))
+# End always run
 
 ############ Functions ############
 # Flag all missing:
@@ -337,7 +339,7 @@ AE_TC$slope34q <- p.adjust(AE_TC$slope34p, method = "fdr")
 # Join possible annotation data:
 AE_TC$posFenIn <- ""
 for(i in 1:nrow(AE_TC)){
-  pMatch1 <- fenIn2$precursorMZ > AE_TC$mean_mz[i] - .001 & fenIn2$precursorMZ < AE_TC$mean_mz[i] + .001
+  pMatch1 <- abs((AE_TC$mean_mz[i] - fenIn2$precursorMZ) / fenIn2$precursorMZ * 10^6) < 1
   pMatch2 <- fenIn2[pMatch1, ]
   if(nrow(pMatch2) > 0){
     pMatch3 <- pMatch2$RT > AE_TC$mean_RT[i] / 60 - .5 & pMatch2$RT < AE_TC$mean_RT[i] / 60 + .5
@@ -443,11 +445,13 @@ for(i in 1:nrow(AE_Pres)){
   temp2 <- as.data.frame(xtabs(~whichSP + pres, data = temp1)) 
   temp2$pres <- paste0(temp2$pres, "_", temp2$whichSP)
   temp2 <- temp2 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
+  names(temp2) <- paste0(names(temp2), "_Freq")
   
   # Tabulate proportions:
-  temp3 <- as.data.frame(prop.table(xtabs(~whichSP + pres, data = temp1)))
+  temp3 <- as.data.frame(prop.table(xtabs(~whichSP + pres, data = temp1), margin = 1))
   temp3$pres <- paste0(temp3$pres, "_", temp3$whichSP)
   temp3 <- temp3 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
+  names(temp3) <- paste0(names(temp3), "_Prop")
   
   # Ordinal logistic regression:
   ordLogistic0 <- MASS::polr(pres ~ 1, data = temp1)
@@ -458,6 +462,8 @@ for(i in 1:nrow(AE_Pres)){
   AE_Pres2[[i]] <- cbind(profID = AE_Pres$profID[i], temp2, temp3)
   print(i)
 }
+AE_Pres2 <- do.call("rbind", AE_Pres2)
+AE_Pres <- AE_Pres %>% left_join(AE_Pres2)
 
 # Adjusted p-values:
 AE_Pres$lrtOverallq <- p.adjust(AE_Pres$lrtOverall, method = "fdr")
@@ -470,7 +476,7 @@ AE_Pres <- AE_Pres %>% left_join(profInfo %>%
 # Join possible annotation data:
 AE_Pres$posFenIn <- ""
 for(i in 1:nrow(AE_Pres)){
-  pMatch1 <- fenIn2$precursorMZ > AE_Pres$mean_mz[i] - .001 & fenIn2$precursorMZ < AE_Pres$mean_mz[i] + .001
+  pMatch1 <- abs((AE_Pres$mean_mz[i] - fenIn2$precursorMZ) / fenIn2$precursorMZ * 10^6) < 1
   pMatch2 <- fenIn2[pMatch1, ]
   if(nrow(pMatch2) > 0){
     pMatch3 <- pMatch2$RT > AE_Pres$mean_RT[i] / 60 - .5 & pMatch2$RT < AE_Pres$mean_RT[i] / 60 + .5
@@ -488,5 +494,74 @@ ggplot(profs3 %>% filter(profID == 5464), aes(x = whichSP, color = whichSP, y = 
        x = "Sampling Point", y = "Intensity", color = "Sampling\nPoint")
 # dev.off()
 
-########### Secondary effluent to Product water ###########
+# Export:
+writexl::write_xlsx(AE_Pres, path = paste0("Results/AE_Pres_", gsub("-", "", Sys.Date()), ".xlsx"))
 
+rm(AE_Pres2, ordLogistic0, ordLogistic1, temp1, temp2, temp3, profs3)
+
+# Save:
+save.image("RData/working_20200702c.RData")
+
+########### Secondary effluent to Product water ###########
+# First get data for the profiles for Secondary Effluent and product water:
+profs3 <- profs2 %>% filter((grepl("SE-", fileName) & !grepl("Pool", fileName)) | 
+                              (grepl("RO_", fileName) & !grepl("Secondary", fileName)))
+# Toss out bad RO samples:
+profs3 <- profs3 %>% filter(!fileName %in% paste0("RO_", 9:14))
+profs3$fileName <- factor(profs3$fileName)
+table(profs3$fileName)
+
+profs3$cycle <- as.integer(str_split(profs3$fileName, "_", simplify = TRUE)[,2])
+profs3$logIntensity <- log10(profs3$intensity)
+profs3$whichSP <- ifelse(grepl("RO", profs3$fileName), "RO", "SE")
+
+# Add indicator for absent, intermediate, present:
+profs3 <- profs3 %>% mutate(pres = case_when(intensity == 0 ~ "Absent", intensity > 5*10^6 ~ "Present", 
+                                             TRUE ~ "Intermediate"))
+profs3$pres <- factor(profs3$pres, levels = c("Absent", "Intermediate", "Present"), ordered = TRUE)
+
+# Remove those absent in all:
+# Starting count:
+profs3 %>% select(profID) %>% unique() %>% nrow() # 56,926
+profs3 <- profs3 %>% group_by(profID) %>% mutate(countPresent = sum(pres == "Present"), 
+                                                 removeThis = countPresent == 0) %>% filter(!removeThis) %>% select(-countPresent, -removeThis)
+profs3 %>% select(profID) %>% unique() %>% nrow() # 15,788
+
+Pres <- data.frame(profID = unique(profs3$profID), lrtOverall = NA)
+Pres2 <- list()
+for(i in 1:nrow(Pres)){
+  # Find all intensity for an individual feature:
+  temp1 <- profs3 %>% filter(profID == Pres$profID[i])
+  
+  # Tabulate present vs. absent:
+  temp2 <- as.data.frame(xtabs(~whichSP + pres, data = temp1)) 
+  temp2$pres <- paste0(temp2$pres, "_", temp2$whichSP)
+  temp2 <- temp2 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
+  names(temp2) <- paste0(names(temp2), "_Freq")
+  
+  # Tabulate proportions:
+  temp3 <- as.data.frame(prop.table(xtabs(~whichSP + pres, data = temp1), margin = 1))
+  temp3$pres <- paste0(temp3$pres, "_", temp3$whichSP)
+  temp3 <- temp3 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
+  names(temp3) <- paste0(names(temp3), "_Prop")
+  
+  # Ordinal logistic regression:
+  ordLogistic0 <- MASS::polr(pres ~ 1, data = temp1)
+  ordLogistic1 <- MASS::polr(pres ~ whichSP, data = temp1)
+  
+  # Eports:
+  Pres$coefSE[i] <- coef(ordLogistic1)
+  Pres$lrtOverall[i] <- anova(ordLogistic0, ordLogistic1)$`Pr(Chi)`[2]
+  Pres2[[i]] <- cbind(profID = Pres$profID[i], temp2, temp3)
+  print(i)
+}
+Pres2 <- do.call("rbind", Pres2)
+Pres <- Pres %>% left_join(Pres2)
+
+# Adjusted p-values:
+Pres$lrtOverallq <- p.adjust(Pres$lrtOverall, method = "fdr")
+
+# Add profile m/z and RT:
+Pres <- Pres %>% left_join(profInfo %>% 
+                                   select(profile_ID, inBlind = `in_blind?`, mean_mz, mean_RT), 
+                                 by = c("profID" = "profile_ID"))

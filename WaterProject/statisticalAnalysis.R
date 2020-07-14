@@ -421,7 +421,7 @@ load("RData/working_20200702b.RData")
 profs3 <- profs2 %>% filter(grepl("AE-", fileName))
 profs3$cycle <- as.integer(str_split(profs3$fileName, "_", simplify = TRUE)[,2])
 profs3$logIntensity <- log10(profs3$intensity)
-profs3$whichSP <- ifelse(grepl("AE-3|AE-4", profs3$fileName), "AE-3/4", "AE-1")
+profs3$whichSP <- factor(ifelse(grepl("AE-3|AE-4", profs3$fileName), "AE-3/4", "AE-1"))
 
 # Add indicator for absent, intermediate, present:
 profs3 <- profs3 %>% mutate(pres = case_when(intensity == 0 ~ "Absent", intensity > 5*10^6 ~ "Present", 
@@ -435,11 +435,11 @@ profs3 <- profs3 %>% group_by(profID) %>% mutate(countPresent = sum(pres == "Pre
            removeThis = countPresent == 0) %>% filter(!removeThis) %>% select(-countPresent, -removeThis)
 profs3 %>% select(profID) %>% unique() %>% nrow() # 10,744
 
-AE_Pres <- data.frame(profID = unique(profs3$profID), lrtOverall = NA)
-AE_Pres2 <- list()
-for(i in 1:nrow(AE_Pres)){
+Pres <- data.frame(profID = unique(profs3$profID), diff = NA, pValue = NA)
+Pres2 <- list()
+for(i in 1:nrow(Pres)){
   # Find all intensity for an individual feature:
-  temp1 <- profs3 %>% filter(profID == AE_Pres$profID[i])
+  temp1 <- profs3 %>% filter(profID == Pres$profID[i])
   
   # Tabulate present vs. absent:
   temp2 <- as.data.frame(xtabs(~whichSP + pres, data = temp1)) 
@@ -453,35 +453,42 @@ for(i in 1:nrow(AE_Pres)){
   temp3 <- temp3 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
   names(temp3) <- paste0(names(temp3), "_Prop")
   
-  # Ordinal logistic regression:
-  ordLogistic0 <- MASS::polr(pres ~ 1, data = temp1)
-  ordLogistic1 <- MASS::polr(pres ~ whichSP, data = temp1)
+  # Wilcoxon Rank-Sum:
+  temp1$pres2 <- as.integer(temp1$pres)
+  if(length(table(temp1$pres2)) > 1){
+    wc1 <- wilcox.test(pres2 ~ whichSP, exact = FALSE, data = temp1)
+    wc2 <- temp1 %>% group_by(whichSP) %>% summarize(mean = mean(pres2))
+    Pres$diff[i] <- wc2$mean[2] - wc2$mean[1]
+    Pres$pValue[i] <- wc1$p.value
+  }else{
+    Pres$diff[i] <- 0
+    Pres$pValue[i] <- 1
+  }
   
   # Eports:
-  AE_Pres$lrtOverall[i] <- anova(ordLogistic0, ordLogistic1)$`Pr(Chi)`[2]
-  AE_Pres2[[i]] <- cbind(profID = AE_Pres$profID[i], temp2, temp3)
+  Pres2[[i]] <- cbind(profID = Pres$profID[i], temp2, temp3)
   print(i)
 }
-AE_Pres2 <- do.call("rbind", AE_Pres2)
-AE_Pres <- AE_Pres %>% left_join(AE_Pres2)
+Pres2 <- do.call("rbind", Pres2)
+Pres <- Pres %>% left_join(Pres2)
 
 # Adjusted p-values:
-AE_Pres$lrtOverallq <- p.adjust(AE_Pres$lrtOverall, method = "fdr")
+Pres$qValue <- p.adjust(Pres$pValue, method = "fdr")
 
 # Add profile m/z and RT:
-AE_Pres <- AE_Pres %>% left_join(profInfo %>% 
+Pres <- Pres %>% left_join(profInfo %>% 
                                select(profile_ID, inBlind = `in_blind?`, mean_mz, mean_RT), 
                              by = c("profID" = "profile_ID"))
 
 # Join possible annotation data:
-AE_Pres$posFenIn <- ""
-for(i in 1:nrow(AE_Pres)){
-  pMatch1 <- abs((AE_Pres$mean_mz[i] - fenIn2$precursorMZ) / fenIn2$precursorMZ * 10^6) < 1
+Pres$posFenIn <- ""
+for(i in 1:nrow(Pres)){
+  pMatch1 <- abs((Pres$mean_mz[i] - fenIn2$precursorMZ) / fenIn2$precursorMZ * 10^6) < 1
   pMatch2 <- fenIn2[pMatch1, ]
   if(nrow(pMatch2) > 0){
-    pMatch3 <- pMatch2$RT > AE_Pres$mean_RT[i] / 60 - .5 & pMatch2$RT < AE_Pres$mean_RT[i] / 60 + .5
+    pMatch3 <- pMatch2$RT > Pres$mean_RT[i] / 60 - .5 & pMatch2$RT < Pres$mean_RT[i] / 60 + .5
     if(nrow(pMatch2[pMatch3,]) > 0){
-      AE_Pres$posFenIn[i] <- paste(pMatch2$feature[pMatch3], collapse = ";")
+      Pres$posFenIn[i] <- paste(pMatch2$feature[pMatch3], collapse = ";")
     }
   }
 }
@@ -495,9 +502,9 @@ ggplot(profs3 %>% filter(profID == 5464), aes(x = whichSP, color = whichSP, y = 
 # dev.off()
 
 # Export:
-writexl::write_xlsx(AE_Pres, path = paste0("Results/AE_Pres_", gsub("-", "", Sys.Date()), ".xlsx"))
+writexl::write_xlsx(Pres, path = paste0("Results/AE_Pres_", gsub("-", "", Sys.Date()), ".xlsx"))
 
-rm(AE_Pres2, ordLogistic0, ordLogistic1, temp1, temp2, temp3, profs3)
+rm(Pres2, wc1, wc2, temp1, temp2, temp3, profs3)
 
 # Save:
 save.image("RData/working_20200702c.RData")
@@ -527,7 +534,7 @@ profs3 <- profs3 %>% group_by(profID) %>% mutate(countPresent = sum(pres == "Pre
                                                  removeThis = countPresent == 0) %>% filter(!removeThis) %>% select(-countPresent, -removeThis)
 profs3 %>% select(profID) %>% unique() %>% nrow() # 15,788
 
-Pres <- data.frame(profID = unique(profs3$profID), lrtOverall = NA)
+Pres <- data.frame(profID = unique(profs3$profID), diff = NA, pValue = NA)
 Pres2 <- list()
 for(i in 1:nrow(Pres)){
   # Find all intensity for an individual feature:
@@ -545,13 +552,19 @@ for(i in 1:nrow(Pres)){
   temp3 <- temp3 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
   names(temp3) <- paste0(names(temp3), "_Prop")
   
-  # Ordinal logistic regression:
-  ordLogistic0 <- MASS::polr(pres ~ 1, data = temp1)
-  ordLogistic1 <- MASS::polr(pres ~ whichSP, data = temp1)
+  # Wilcoxon Rank-Sum:
+  temp1$pres2 <- as.integer(temp1$pres)
+  if(length(table(temp1$pres2)) > 1){
+    wc1 <- wilcox.test(pres2 ~ whichSP, exact = FALSE, data = temp1)
+    wc2 <- temp1 %>% group_by(whichSP) %>% summarize(mean = mean(pres2))
+    Pres$diff[i] <- wc2$mean[2] - wc2$mean[1]
+    Pres$pValue[i] <- wc1$p.value
+  }else{
+    Pres$diff[i] <- 0
+    Pres$pValue[i] <- 1
+  }
   
   # Eports:
-  Pres$coefSE[i] <- coef(ordLogistic1)
-  Pres$lrtOverall[i] <- anova(ordLogistic0, ordLogistic1)$`Pr(Chi)`[2]
   Pres2[[i]] <- cbind(profID = Pres$profID[i], temp2, temp3)
   print(i)
 }
@@ -559,7 +572,7 @@ Pres2 <- do.call("rbind", Pres2)
 Pres <- Pres %>% left_join(Pres2)
 
 # Adjusted p-values:
-Pres$lrtOverallq <- p.adjust(Pres$lrtOverall, method = "fdr")
+Pres$qValue <- p.adjust(Pres$qValue, method = "fdr")
 
 # Add profile m/z and RT:
 Pres <- Pres %>% left_join(profInfo %>% 

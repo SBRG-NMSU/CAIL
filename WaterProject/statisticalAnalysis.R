@@ -507,12 +507,14 @@ ggplot(profs3 %>% filter(profID == 5907), aes(x = whichSP, color = whichSP, y = 
 # Export:
 writexl::write_xlsx(Pres, path = paste0("Results/AE_Pres_", gsub("-", "", Sys.Date()), ".xlsx"))
 
-rm(Pres2, wc1, wc2, temp1, temp2, temp3, profs3)
-
-# Save:
+# Save and cleanup:
+Pres_AE <- Pres
+rm(Pres, Pres2, wc1, wc2, temp1, temp2, temp3, profs3)
 save.image("RData/working_20200702c.RData")
 
 ########### Secondary effluent to Product water ###########
+load("RData/working_20200702c.RData")
+
 # First get data for the profiles for Secondary Effluent and product water:
 profs3 <- profs2 %>% filter((grepl("SE-", fileName) & !grepl("Pool", fileName)) | 
                               (grepl("RO_", fileName) & !grepl("Secondary", fileName)))
@@ -575,9 +577,15 @@ Pres2 <- do.call("rbind", Pres2)
 Pres <- Pres %>% left_join(Pres2)
 
 # Adjusted p-values:
-Pres$qValue <- p.adjust(Pres$qValue, method = "fdr")
+Pres$qValue <- p.adjust(Pres$pValue, method = "fdr")
 
 # Add profile m/z and RT:
 Pres <- Pres %>% left_join(profInfo %>% 
                                    select(profile_ID, inBlind = `in_blind?`, mean_mz, mean_RT), 
                                  by = c("profID" = "profile_ID"))
+
+# Export:
+writexl::write_xlsx(Pres, path = paste0("Results/SE_Product_Pres_", gsub("-", "", Sys.Date()), ".xlsx"))
+
+Pres_SE_Product <- Pres
+rm(Pres, Pres2, wc1, wc2, temp1, temp2, temp3, profs3)

@@ -44,12 +44,19 @@ impFun <- function(x){
 
 ############ Imports ############
 # Read in sample annotation:
-sampleAnno <- read.csv("SampleAnno_20200714.csv")
+sampleAnno <- read.csv("RData/SampleAnno_20200714.csv")
 sampleAnno$ID <- as.character(sampleAnno$ID)
 sampleAnno$Name <- factor(sampleAnno$Name, levels = sampleAnno$Name[sampleAnno$myOrder])
 
 # Load profile data:
 load("RData/enviMassOutput_20200714.RData")
+rm(profs)
+profs <- read.csv("RData/profiled_peaks_20200714.csv")
+profInfo2 <- profs[, !grepl("X", names(profs))]
+profs <- profs[, grepl("X", names(profs))]
+profs <- t(profs)
+colnames(profs) <- profInfo2$profile_ID
+rownames(profs) <- gsub("X", "", str_split(rownames(profs), "\\.", simplify = TRUE)[,1])
 
 # Internal standards:
 iSTDs <- readxl::read_excel("iSTDs.xlsx")
@@ -287,11 +294,11 @@ profs3$whichSP <- ifelse(grepl("AE-3|AE-4", profs3$fileName), "AE-3/4", "AE-1")
 # 2. Remove profiles with average peak area less than 5×10^6 in both AE-1 and AE-3/4
 
 # Filter out super missing:
-profs3 %>% select(profID) %>% unique() %>% nrow() # 62,434 profiles
+profs3 %>% select(profID) %>% unique() %>% nrow() # 53,672 profiles
 profs3 <- profs3 %>% group_by(profID) %>% mutate(countNonZero = sum(intensity > 0), countTotal = n(),
                                                  removeIt = ifelse(countNonZero / countTotal <= .6, TRUE, FALSE)) %>%
   ungroup() %>% filter(!removeIt) %>% select(-(countNonZero:removeIt))
-profs3 %>% select(profID) %>% unique() %>% nrow() # 1,973 profiles
+profs3 %>% select(profID) %>% unique() %>% nrow() # 1,206 profiles
 
 # Filter out too low abundance: 
 profs3 <- profs3 %>% group_by(profID, whichSP) %>% mutate(meanIntByGroup = mean(intensity), 
@@ -299,7 +306,7 @@ profs3 <- profs3 %>% group_by(profID, whichSP) %>% mutate(meanIntByGroup = mean(
      mutate(countLowAbundanceByGroup = sum(lowAbundanceByGroup), tooLow = countLowAbundanceByGroup == groupN) %>%
   group_by(profID) %>% mutate(removeThis = sum(tooLow) > 0) %>% ungroup() %>% filter(!removeThis) %>%
   select(-meanIntByGroup, -lowAbundanceByGroup, -groupN, -countLowAbundanceByGroup, -tooLow, -removeThis)
-profs3 %>% select(profID) %>% unique() %>% nrow() # 1,372 profiles
+profs3 %>% select(profID) %>% unique() %>% nrow() # 760 profiles
 
 # Imputation
 profs3 <- profs3 %>% group_by(profID) %>% mutate(mNZ = minNonZero(intensity))
@@ -433,10 +440,10 @@ profs3$pres <- factor(profs3$pres, levels = c("Absent", "Intermediate", "Present
 
 # Remove those absent in all:
 # Starting count:
-profs3 %>% select(profID) %>% unique() %>% nrow() # 62,434
+profs3 %>% select(profID) %>% unique() %>% nrow() # 53,672
 profs3 <- profs3 %>% group_by(profID) %>% mutate(countPresent = sum(pres == "Present"), 
            removeThis = countPresent == 0) %>% filter(!removeThis) %>% select(-countPresent, -removeThis)
-profs3 %>% select(profID) %>% unique() %>% nrow() # 10,346
+profs3 %>% select(profID) %>% unique() %>% nrow() # 7,850
 
 Pres <- data.frame(profID = unique(profs3$profID), diff = NA, pValue = NA)
 Pres2 <- list()
@@ -534,10 +541,10 @@ profs3$pres <- factor(profs3$pres, levels = c("Absent", "Intermediate", "Present
 
 # Remove those absent in all:
 # Starting count:
-profs3 %>% select(profID) %>% unique() %>% nrow() # 56,926
+profs3 %>% select(profID) %>% unique() %>% nrow() # 53,672
 profs3 <- profs3 %>% group_by(profID) %>% mutate(countPresent = sum(pres == "Present"), 
                                                  removeThis = countPresent == 0) %>% filter(!removeThis) %>% select(-countPresent, -removeThis)
-profs3 %>% select(profID) %>% unique() %>% nrow() # 15,788
+profs3 %>% select(profID) %>% unique() %>% nrow() # 11,499
 
 Pres <- data.frame(profID = unique(profs3$profID), diff = NA, pValue = NA)
 Pres2 <- list()
@@ -587,5 +594,8 @@ Pres <- Pres %>% left_join(profInfo %>%
 # Export:
 writexl::write_xlsx(Pres, path = paste0("Results/SE_Product_Pres_", gsub("-", "", Sys.Date()), ".xlsx"))
 
+# Save and cleanup:
 Pres_SE_Product <- Pres
 rm(Pres, Pres2, wc1, wc2, temp1, temp2, temp3, profs3)
+save.image("RData/working_20200702d.RData")
+

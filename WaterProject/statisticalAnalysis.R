@@ -594,5 +594,8 @@ Pres <- Pres %>% left_join(profInfo %>%
 # Export:
 writexl::write_xlsx(Pres, path = paste0("Results/SE_Product_Pres_", gsub("-", "", Sys.Date()), ".xlsx"))
 
+# Save and cleanup:
 Pres_SE_Product <- Pres
 rm(Pres, Pres2, wc1, wc2, temp1, temp2, temp3, profs3)
+save.image("RData/working_20200702d.RData")
+

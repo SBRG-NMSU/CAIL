@@ -6,9 +6,9 @@ oldPar <- par()
 library(tidyverse)
 library(metfRag)
 
-os <- Sys.info()["sysname"]
-baseDir <- ifelse(os == "Windows", "C:/Users/ptrainor/gdrive/", "~/gdrive/")
-setwd(paste0(baseDir, "CAIL/ProducedWater"))
+# baseDir <- "C:/Users/ptrainor/gdrive/CAIL/"
+baseDir <- "~/GitHub/cail/"
+setwd(paste0(baseDir, "ProducedWater"))
 # End always run
 
 ############ Import MS/MS data ############
@@ -53,27 +53,48 @@ msmsData2 <- apply(msmsData1, 1, function(x) makeList(x))
 
 ############ Match MS1 ############
 rtTol <- 20 / 60
-mzTol <- 0.0005
+mzTol <- 3
+
+# Add tolerances to MS1 data of MS/MS data:
+msmsData1$rtLower <- msmsData1$AverageRtmin - rtTol
+msmsData1$rtUpper <- msmsData1$AverageRtmin + rtTol
+msmsData1$mzLower <- msmsData1$AverageMz - msmsData1$AverageMz * mzTol * 1e-6
+msmsData1$mzUpper <- msmsData1$AverageMz + msmsData1$AverageMz * mzTol * 1e-6
 
 test1 <- 9.253 > (msmsData1$AverageRtmin - rtTol) & 9.253 < (msmsData1$AverageRtmin + rtTol)
 test2 <- 376.2602 > (msmsData1$AverageMz - mzTol) & 376.2602 < (msmsData1$AverageMz + mzTol)
 which1 <- which(test1 & test2)
 
-msmsData2[[which1]]$MSMS
-msmsData2[[which1]]$neutralMass
-
 ############ MetFragR queries ############
-sObj <- list()
+for(i in 1:length(msmsData2)){
+  if(length(msmsData2[[i]]$MSMS) > 1){
+    sObj <- list()
+    cand <- NULL
+    
+    sObj[["DatabaseSearchRelativeMassDeviation"]] <- 3.0
+    sObj[["FragmentPeakMatchAbsoluteMassDeviation"]] <- 0.001
+    sObj[["FragmentPeakMatchRelativeMassDeviation"]] <- 10
+    sObj[["PrecursorIonMode"]] <- 1
+    sObj[["IsPositiveIonMode"]] <- TRUE
+    sObj[["MetFragDatabaseType"]] <- "PubChem"
+    sObj[["NeutralPrecursorMass"]] <- msmsData2[[i]]$neutralMass
+    sObj[["MetFragPreProcessingCandidateFilter"]] <- c("UnconnectedCompoundFilter","IsotopeFilter")
+    sObj[["MetFragPostProcessingCandidateFilter"]] <- c("InChIKeyFilter")
+    sObj[["PeakList"]] <- msmsData2[[i]]$MSMS
+    
+    cand1 <- run.metfrag(sObj)
+    
+    # Check to see if any candidates were found; if so save:
+    if(sum(cand1$Score) > 0){
+      msmsData2[[i]]$candidates <- cand1
+    }else{
+      msmsData2[[i]]$candidates <- data.frame()
+    }
+     
+  }else{
+    msmsData2[[i]]$candidates <- data.frame()
+  }
+  print(i)
+}
 
-sObj[["DatabaseSearchRelativeMassDeviation"]] <- 3.0
-sObj[["FragmentPeakMatchAbsoluteMassDeviation"]] <- 0.001
-sObj[["FragmentPeakMatchRelativeMassDeviation"]] <- 10
-sObj[["PrecursorIonMode"]] <- 1
-sObj[["IsPositiveIonMode"]] <- TRUE
-sObj[["MetFragDatabaseType"]] <- "PubChem"
-sObj[["NeutralPrecursorMass"]] <- 375.2526
-sObj[["MetFragPreProcessingCandidateFilter"]] <- c("UnconnectedCompoundFilter","IsotopeFilter")
-sObj[["MetFragPostProcessingCandidateFilter"]] <- c("InChIKeyFilter")
-sObj[["PeakList"]] <- msmsData2[[which1]]$MSMS
-
-cand1 <- run.metfrag(sObj)
+idk <- lapply(msmsData2, FUN = function(x) x$candidates)

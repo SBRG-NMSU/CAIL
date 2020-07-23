@@ -4,7 +4,7 @@ options(stringsAsFactors = FALSE, scipen = 600, max.print = 100000)
 oldPar <- par()
 
 library(tidyverse)
-library(metfRag)
+# library(metfRag)
 
 # baseDir <- "C:/Users/ptrainor/gdrive/CAIL/"
 baseDir <- "~/GitHub/cail/"
@@ -51,6 +51,9 @@ makeList <- function(x){
 # Call functions:
 msmsData2 <- apply(msmsData1, 1, function(x) makeList(x))
 
+############ Import Molecular Formula Enumeration ############
+
+
 ############ Match MS1 ############
 rtTol <- 20 / 60
 mzTol <- 3
@@ -61,18 +64,16 @@ msmsData1$rtUpper <- msmsData1$AverageRtmin + rtTol
 msmsData1$mzLower <- msmsData1$AverageMz - msmsData1$AverageMz * mzTol * 1e-6
 msmsData1$mzUpper <- msmsData1$AverageMz + msmsData1$AverageMz * mzTol * 1e-6
 
-test1 <- 9.253 > (msmsData1$AverageRtmin - rtTol) & 9.253 < (msmsData1$AverageRtmin + rtTol)
-test2 <- 376.2602 > (msmsData1$AverageMz - mzTol) & 376.2602 < (msmsData1$AverageMz + mzTol)
-which1 <- which(test1 & test2)
+
 
 ############ MetFragR queries ############
-for(i in 1:length(msmsData2)){
+for(i in 1:100){
   if(length(msmsData2[[i]]$MSMS) > 1){
     sObj <- list()
     cand <- NULL
     
     sObj[["DatabaseSearchRelativeMassDeviation"]] <- 3.0
-    sObj[["FragmentPeakMatchAbsoluteMassDeviation"]] <- 0.001
+    sObj[["FragmentPeakMatchAbsoluteMassDeviation"]] <- 0.1
     sObj[["FragmentPeakMatchRelativeMassDeviation"]] <- 10
     sObj[["PrecursorIonMode"]] <- 1
     sObj[["IsPositiveIonMode"]] <- TRUE
@@ -90,7 +91,7 @@ for(i in 1:length(msmsData2)){
     }else{
       msmsData2[[i]]$candidates <- data.frame()
     }
-     
+    
   }else{
     msmsData2[[i]]$candidates <- data.frame()
   }

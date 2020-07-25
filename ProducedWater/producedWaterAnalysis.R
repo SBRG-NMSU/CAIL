@@ -86,6 +86,7 @@ makeList <- function(x){
 
 # Call functions:
 msmsData2 <- apply(msmsData1, 1, function(x) makeList(x))
+names(msmsData2) <- msmsData1$AlignmentID
 
 ############ Match MS1 ############
 rtTol <- 5 / 60
@@ -115,6 +116,15 @@ for(i in 1:nrow(profInfo2)){
   }
 }
 
+# Add adduct information:
+profInfo2$adduct <- gsub("\\*|\\*\\*", "", 
+                         str_split(profInfo2$neutral_mass_info, " / ", simplify = TRUE)[,1])
+
+# Aduct match table:
+adductMatch <- data.frame(enviMassForm = c("M+H", "M+NH4", "M+Na", "M+K"), 
+                          metFragAdduct = c("[M+H]+", "[M+NH4]+", "[M+Na]+", "[M+K]+"))
+profInfo2 <- profInfo2 %>% left_join(adductMatch, by = c("adduct"="enviMassForm"))
+
 ############ MetFrag queries ############
 # Modified Run MetFrag code:
 runMetFragMy <-function (config_file, MetFrag_dir, CL_name, config_dir = dirname(config_file)) {
@@ -141,54 +151,31 @@ runMetFragMy <-function (config_file, MetFrag_dir, CL_name, config_dir = dirname
   setwd(current_dir)
 }
 
-# Write temp .txt file with MS/MS data:
+# Base directory:
 baseDir2 <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater"
 
-write.table(msmsData2[[4111]]$MSMS, file = paste0(baseDir2, "/msmsPeaks/prof_1662.txt"), col.names = FALSE,
-            row.names = FALSE, sep = "\t")
+profID <- "1662"
 
-ReSOLUTION::MetFragConfig(mass = 218.2115, adduct_type = "[M+H]+", results_filename = "res",
-                          peaklist_path = paste0(baseDir2, "/msmsPeaks/prof_1662.txt"), 
+# Which MSMS from list object:
+whichMSMS <- profInfo2$msmsMatchU[profInfo2$profile_ID == profID]
+
+# Write temp .txt file with MS/MS data:
+write.table(msmsData2[[whichMSMS]]$MSMS, file = paste0(baseDir2, "/msmsPeaks/", profID, ".txt"), 
+            col.names = FALSE, row.names = FALSE, sep = "\t")
+
+# Write configuration file for MetFrag:
+profMZ <- profInfo2$profile_mean_mass[profInfo2$profile_ID == profID]
+profAdduct <- profInfo2$metFragAdduct[profInfo2$profile_ID == profID]
+ReSOLUTION::MetFragConfig(mass = profMZ, adduct_type = profAdduct, 
+                          results_filename = paste0("prof_", profID),
+                          peaklist_path = paste0(baseDir2, "/msmsPeaks/prof_", profID, ".txt"), 
                           base_dir = paste0(baseDir2, "/metFragOut"),
-                          mzabs = 0.05, frag_ppm = 100)
+                          mzabs = 0.05, frag_ppm = 100, output = "CSV")
 
-runMetFragMy(paste0(baseDir2, "/metFragOut/config/res_config.txt"), 
+# MetFrag call:
+runMetFragMy(paste0(baseDir2, "/metFragOut/config/prof_", profID, "_config.txt"), 
                        MetFrag_dir = "C:/Program Files/metfrag/",
                        CL_name = "MetFrag2.4.5-CL.jar")
 
 baseDir <- "~/GitHub/cail/"
 setwd(paste0(baseDir, "ProducedWater"))
-
-
-for(i in 1:100){
-  if(length(msmsData2[[i]]$MSMS) > 1){
-    sObj <- list()
-    cand <- NULL
-    
-    sObj[["DatabaseSearchRelativeMassDeviation"]] <- 3.0
-    sObj[["FragmentPeakMatchAbsoluteMassDeviation"]] <- 0.1
-    sObj[["FragmentPeakMatchRelativeMassDeviation"]] <- 10
-    sObj[["PrecursorIonMode"]] <- 1
-    sObj[["IsPositiveIonMode"]] <- TRUE
-    sObj[["MetFragDatabaseType"]] <- "PubChem"
-    sObj[["NeutralPrecursorMass"]] <- msmsData2[[i]]$neutralMass
-    sObj[["MetFragPreProcessingCandidateFilter"]] <- c("UnconnectedCompoundFilter","IsotopeFilter")
-    sObj[["MetFragPostProcessingCandidateFilter"]] <- c("InChIKeyFilter")
-    sObj[["PeakList"]] <- msmsData2[[i]]$MSMS
-    
-    cand1 <- run.metfrag(sObj)
-    
-    # Check to see if any candidates were found; if so save:
-    if(sum(cand1$Score) > 0){
-      msmsData2[[i]]$candidates <- cand1
-    }else{
-      msmsData2[[i]]$candidates <- data.frame()
-    }
-    
-  }else{
-    msmsData2[[i]]$candidates <- data.frame()
-  }
-  print(i)
-}
-
-idk <- lapply(msmsData2, FUN = function(x) x$candidates)

@@ -115,7 +115,51 @@ for(i in 1:nrow(profInfo2)){
   }
 }
 
-############ MetFragR queries ############
+############ MetFrag queries ############
+# Modified Run MetFrag code:
+runMetFragMy <-function (config_file, MetFrag_dir, CL_name, config_dir = dirname(config_file)) {
+  config_exists <- file.exists(config_file) && file.exists(config_dir)
+  current_dir <- getwd()
+  if (config_exists) {
+    setwd(MetFrag_dir)
+    log_dir <- gsub("config", "log", config_dir)
+    if (!file.exists(log_dir)) {
+      dir.create(log_dir)
+    }
+  }
+  else {
+    warning(paste("Configuration file ", config_file, 
+                  " or directory not found, please try a new file"))
+    stop()
+  }
+  MetFragCommand <- paste('java -jar "', gsub("/", "\\", paste0(MetFrag_dir, CL_name), fixed = TRUE), 
+                          '" ', config_file, sep = "")
+  MetFrag_out <- system(command = MetFragCommand, intern = TRUE, 
+                        show.output.on.console = FALSE)
+  log_file <- gsub("config", "log", config_file)
+  write(MetFrag_out, log_file)
+  setwd(current_dir)
+}
+
+# Write temp .txt file with MS/MS data:
+baseDir2 <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater"
+
+write.table(msmsData2[[4111]]$MSMS, file = paste0(baseDir2, "/msmsPeaks/prof_1662.txt"), col.names = FALSE,
+            row.names = FALSE, sep = "\t")
+
+ReSOLUTION::MetFragConfig(mass = 218.2115, adduct_type = "[M+H]+", results_filename = "res",
+                          peaklist_path = paste0(baseDir2, "/msmsPeaks/prof_1662.txt"), 
+                          base_dir = paste0(baseDir2, "/metFragOut"),
+                          mzabs = 0.05, frag_ppm = 100)
+
+runMetFragMy(paste0(baseDir2, "/metFragOut/config/res_config.txt"), 
+                       MetFrag_dir = "C:/Program Files/metfrag/",
+                       CL_name = "MetFrag2.4.5-CL.jar")
+
+baseDir <- "~/GitHub/cail/"
+setwd(paste0(baseDir, "ProducedWater"))
+
+
 for(i in 1:100){
   if(length(msmsData2[[i]]$MSMS) > 1){
     sObj <- list()

@@ -1,0 +1,7 @@
+
+*.RData
+*.xlsx
+*.txt
+*.csv
+*.xls
+WaterProject/.Rhistory

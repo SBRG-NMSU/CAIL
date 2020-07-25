@@ -4,6 +4,7 @@ options(stringsAsFactors = FALSE, scipen = 600, max.print = 100000)
 oldPar <- par()
 
 library(tidyverse)
+library(doParallel)
 # library(metfRag)
 
 # baseDir <- "C:/Users/ptrainor/gdrive/CAIL/"
@@ -154,28 +155,35 @@ runMetFragMy <-function (config_file, MetFrag_dir, CL_name, config_dir = dirname
 # Base directory:
 baseDir2 <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater"
 
-profID <- "1662"
+profList <- profInfo2$profile_ID[1:10]
 
-# Which MSMS from list object:
-whichMSMS <- profInfo2$msmsMatchU[profInfo2$profile_ID == profID]
-
-# Write temp .txt file with MS/MS data:
-write.table(msmsData2[[whichMSMS]]$MSMS, file = paste0(baseDir2, "/msmsPeaks/", profID, ".txt"), 
-            col.names = FALSE, row.names = FALSE, sep = "\t")
-
-# Write configuration file for MetFrag:
-profMZ <- profInfo2$profile_mean_mass[profInfo2$profile_ID == profID]
-profAdduct <- profInfo2$metFragAdduct[profInfo2$profile_ID == profID]
-ReSOLUTION::MetFragConfig(mass = profMZ, adduct_type = profAdduct, 
-                          results_filename = paste0("prof_", profID),
-                          peaklist_path = paste0(baseDir2, "/msmsPeaks/prof_", profID, ".txt"), 
-                          base_dir = paste0(baseDir2, "/metFragOut"),
-                          mzabs = 0.05, frag_ppm = 100, output = "CSV")
-
-# MetFrag call:
-runMetFragMy(paste0(baseDir2, "/metFragOut/config/prof_", profID, "_config.txt"), 
-                       MetFrag_dir = "C:/Program Files/metfrag/",
-                       CL_name = "MetFrag2.4.5-CL.jar")
+cl <- makeCluster(8)
+registerDoParallel(cl)
+foreach(i=1:10) %dopar%{
+  profID <- profList[i]
+  
+  # Which MSMS from list object:
+  whichMSMS <- profInfo2$msmsMatchU[profInfo2$profile_ID == profID]
+  
+  # Write temp .txt file with MS/MS data:
+  write.table(msmsData2[[whichMSMS]]$MSMS, file = paste0(baseDir2, "/msmsPeaks/prof_", profID, ".txt"), 
+              col.names = FALSE, row.names = FALSE, sep = "\t")
+  
+  # Write configuration file for MetFrag:
+  profMZ <- profInfo2$profile_mean_mass[profInfo2$profile_ID == profID]
+  profAdduct <- profInfo2$metFragAdduct[profInfo2$profile_ID == profID]
+  ReSOLUTION::MetFragConfig(mass = profMZ, adduct_type = profAdduct, 
+                            results_filename = paste0("prof_", profID),
+                            peaklist_path = paste0(baseDir2, "/msmsPeaks/prof_", profID, ".txt"), 
+                            base_dir = paste0(baseDir2, "/metFragOut"),
+                            mzabs = 0.05, frag_ppm = 100, output = "CSV")
+  
+  # MetFrag call:
+  runMetFragMy(paste0(baseDir2, "/metFragOut/config/prof_", profID, "_config.txt"), 
+               MetFrag_dir = "C:/Program Files/metfrag/",
+               CL_name = "MetFrag2.4.5-CL.jar")
+}
+stopCluster(cl)
 
 baseDir <- "~/GitHub/cail/"
 setwd(paste0(baseDir, "ProducedWater"))

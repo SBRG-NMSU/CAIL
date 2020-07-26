@@ -4,7 +4,7 @@ options(stringsAsFactors = FALSE, scipen = 600, max.print = 100000)
 oldPar <- par()
 
 library(tidyverse)
-library(doParallel)
+# library(doParallel)
 # library(metfRag)
 
 # baseDir <- "C:/Users/ptrainor/gdrive/CAIL/"
@@ -126,8 +126,7 @@ adductMatch <- data.frame(enviMassForm = c("M+H", "M+NH4", "M+Na", "M+K"),
                           metFragAdduct = c("[M+H]+", "[M+NH4]+", "[M+Na]+", "[M+K]+"))
 profInfo2 <- profInfo2 %>% left_join(adductMatch, by = c("adduct"="enviMassForm"))
 
-############ MetFrag queries ############
-# Modified Run MetFrag code:
+############ Modified Run MetFrag code ############
 runMetFragMy <-function (config_file, MetFrag_dir, CL_name, config_dir = dirname(config_file)) {
   config_exists <- file.exists(config_file) && file.exists(config_dir)
   current_dir <- getwd()
@@ -152,14 +151,78 @@ runMetFragMy <-function (config_file, MetFrag_dir, CL_name, config_dir = dirname
   setwd(current_dir)
 }
 
+############ EPA ChemTox MetFrag queries ############
+compToxFile <- "C:/Users/ptrainor/Dropbox (NMSU Advanced)/Patrick/DSSTOX_MS_Ready_Chemical_Structures/DSSToxMS-Ready.xlsx"
+compTox <- readxl::read_excel(compToxFile)
+
+# Match to example .csv format:
+compToxMapper <- data.frame(currentNames = c("Preferred_Name", "CAS-RN", "DSSTox_Substance_ID", "SMILES", 
+                            "SMILES (MS-Ready)", "Formula", "Monoisotopic Mass (MS-Ready)",
+                            "InChIString (MS-Ready)", "InChIKey (MS-Ready)", "DSSTox_Compound_ID (MS-Ready)"),
+           newNames = c("Name", "CASRN_DTXSID", "Identifier", "SMILES_DTXSID", 
+                        "SMILES", "MolecularFormula", "MonoisotopicMass",
+                        "InChI", "InChIKey", "DTXCID_MSready"))
+compTox <- compTox %>% select(compToxMapper$currentNames)
+names(compTox) <- compToxMapper$newNames[match(names(compTox), compToxMapper$currentNames)]
+
+# Remove incomplete cases:
+isNC <- rep(TRUE, nrow(compTox))
+for(i in 1:nrow(compTox)){
+  isNC[i] <- !complete.cases(compTox[i, ])
+}
+compTox <- compTox[!isNC,]
+
+# Break InChIKey into pieces:
+InChIKeyTemp <- str_split(compTox$InChIKey, "-", simplify = TRUE)
+compTox$InChIKey1 <- InChIKeyTemp[,1]
+compTox$InChIKey2 <- InChIKeyTemp[,2]
+compTox$InChIKey3 <- InChIKeyTemp[,3]
+
+# Remove "Aux" info from InChIString:
+compTox$InChI <- str_split(compTox$InChI, "\n", simplify = TRUE)[,1]
+
+csvFile <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater/CompTox.csv"
+#csvFile <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater/kegg_2017-07-23.csv"
+
+write.csv(compTox, csvFile, na = "", row.names = FALSE)
+
 # Base directory:
 baseDir2 <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater"
 
-profList <- profInfo2$profile_ID[1:10]
+profList <- profInfo2$profile_ID
+for(i in 1:15){
+  profID <- profList[i]
+  
+  # Which MSMS from list object:
+  whichMSMS <- profInfo2$msmsMatchU[profInfo2$profile_ID == profID]
+  
+  # Write temp .txt file with MS/MS data:
+  write.table(msmsData2[[whichMSMS]]$MSMS, file = paste0(baseDir2, "/msmsPeaks2/prof_", profID, ".txt"), 
+              col.names = FALSE, row.names = FALSE, sep = "\t")
+  
+  # Write configuration file for MetFrag:
+  profMZ <- profInfo2$profile_mean_mass[profInfo2$profile_ID == profID]
+  profAdduct <- profInfo2$metFragAdduct[profInfo2$profile_ID == profID]
+  ReSOLUTION::MetFragConfig(mass = profMZ, adduct_type = profAdduct, 
+                            DB = "LocalCSV", localDB_path = csvFile,
+                            results_filename = paste0("prof_", profID),
+                            peaklist_path = paste0(baseDir2, "/msmsPeaks2/prof_", profID, ".txt"), 
+                            base_dir = paste0(baseDir2, "/metFragOut2"), ppm = 2,
+                            mzabs = 0.05, frag_ppm = 100, output = "CSV")
+  
+  # MetFrag call:
+  runMetFragMy(paste0(baseDir2, "/metFragOut2/config/prof_", profID, "_config.txt"), 
+               MetFrag_dir = "C:/Program Files/metfrag/", CL_name = "MetFrag2.4.5-CL.jar")
+  
+  print(i)
+}
 
-cl <- makeCluster(8)
-registerDoParallel(cl)
-foreach(i=1:10) %dopar%{
+############ Pubmed online MetFrag queries ############
+# Base directory:
+baseDir2 <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater"
+
+profList <- profInfo2$profile_ID
+for(i in 1:length(profList)){
   profID <- profList[i]
   
   # Which MSMS from list object:
@@ -175,15 +238,15 @@ foreach(i=1:10) %dopar%{
   ReSOLUTION::MetFragConfig(mass = profMZ, adduct_type = profAdduct, 
                             results_filename = paste0("prof_", profID),
                             peaklist_path = paste0(baseDir2, "/msmsPeaks/prof_", profID, ".txt"), 
-                            base_dir = paste0(baseDir2, "/metFragOut"),
+                            base_dir = paste0(baseDir2, "/metFragOut"), ppm = 2,
                             mzabs = 0.05, frag_ppm = 100, output = "CSV")
   
   # MetFrag call:
   runMetFragMy(paste0(baseDir2, "/metFragOut/config/prof_", profID, "_config.txt"), 
-               MetFrag_dir = "C:/Program Files/metfrag/",
-               CL_name = "MetFrag2.4.5-CL.jar")
+               MetFrag_dir = "C:/Program Files/metfrag/", CL_name = "MetFrag2.4.5-CL.jar")
+  
+  print(i)
 }
-stopCluster(cl)
 
 baseDir <- "~/GitHub/cail/"
 setwd(paste0(baseDir, "ProducedWater"))

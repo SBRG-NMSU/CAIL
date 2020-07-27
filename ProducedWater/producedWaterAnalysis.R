@@ -190,7 +190,7 @@ write.csv(compTox, csvFile, na = "", row.names = FALSE)
 baseDir2 <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater"
 
 profList <- profInfo2$profile_ID
-for(i in 1:15){
+for(i in 1:length(profList)){
   profID <- profList[i]
   
   # Which MSMS from list object:
@@ -248,5 +248,46 @@ for(i in 1:length(profList)){
   print(i)
 }
 
+############ Import MetFrag results ############
 baseDir <- "~/GitHub/cail/"
 setwd(paste0(baseDir, "ProducedWater"))
+
+fNameRes1 <- "prof_1886.csv"
+profRes1 <- str_split(fNameRes1, "_|\\.", simplify = TRUE)[,2]
+res1 <- read.csv(paste0("metFragOut/results/", fNameRes1))
+
+# Calculate mass error:
+res1$mzAbsErr <- res1$MonoisotopicMass - profInfo2$neutral_mass[profInfo2$profile_ID == profRes1]
+res1$mzRelErr <- res1$mzAbsErr / res1$MonoisotopicMass * 1e6
+
+## Fragment match plot:
+# Get fragments:
+msmsRes1 <- msmsData2[[profInfo2$msmsMatchU[profInfo2$profile_ID == profRes1]]]$MSMS
+msmsRes1 <- as.data.frame(msmsRes1)
+names(msmsRes1) <- c("m/z", "Intensity")
+
+# Get MetFrag match results:
+expPeaksRes1 <- str_split(str_split(res1$ExplPeaks[1], ";", simplify = TRUE), "_", simplify = TRUE)
+expPeaksRes1 <- as.matrix(expPeaksRes1)
+expPeaksRes1 <- as.data.frame(apply(expPeaksRes1, 2, as.numeric))
+names(expPeaksRes1)[1] <- "m/z"
+
+# Match fragements and MetFrag attributed:
+msmsRes1$matched <- FALSE
+msmsRes1$value <- NA
+for(i in 1:nrow(msmsRes1)){
+  which1 <- which(msmsRes1$`m/z`[i] < expPeaksRes1$`m/z` + .0001 & msmsRes1$`m/z`[i] > expPeaksRes1$`m/z` - .0001)
+  if(length(which1) > 0){
+    msmsRes1$matched[i] <- TRUE
+    msmsRes1$value[i] <- expPeaksRes1$V2[which1]
+  }
+}
+
+ggplot(msmsRes1, aes(x = `m/z`, xend = `m/z`, y = 0, yend = Intensity, color = matched)) + 
+  geom_segment(lwd = 1.2) + theme_bw() + scale_color_brewer(palette = "Set1")
+
+ggplot(msmsRes1, aes(x = `m/z`, xend = `m/z`, y = 0, yend = Intensity)) + 
+  geom_segment(lwd = 1.2, color = "dodgerblue4") + 
+  geom_segment(aes(x = `m/z`, xend = `m/z`, y = 0, yend = -value, color = "indianred4"), lwd = 1.2) + 
+  geom_hline(yintercept = 0, lwd = .1) +
+  theme_bw() + scale_color_brewer(palette = "Set1")

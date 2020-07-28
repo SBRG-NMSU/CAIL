@@ -4,8 +4,6 @@ options(stringsAsFactors = FALSE, scipen = 600, max.print = 100000)
 oldPar <- par()
 
 library(tidyverse)
-# library(doParallel)
-# library(metfRag)
 
 # baseDir <- "C:/Users/ptrainor/gdrive/CAIL/"
 baseDir <- "~/GitHub/cail/"
@@ -189,6 +187,10 @@ write.csv(compTox, csvFile, na = "", row.names = FALSE)
 # Base directory:
 baseDir2 <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater"
 
+# Stop here and save:
+save.image("working_20200728.RData")
+
+# Run MetFrag with CompTox
 profList <- profInfo2$profile_ID
 for(i in 1:length(profList)){
   profID <- profList[i]
@@ -218,9 +220,6 @@ for(i in 1:length(profList)){
 }
 
 ############ Pubmed online MetFrag queries ############
-# Base directory:
-baseDir2 <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater"
-
 profList <- profInfo2$profile_ID
 for(i in 1:length(profList)){
   profID <- profList[i]
@@ -249,8 +248,8 @@ for(i in 1:length(profList)){
 }
 
 ############ Import MetFrag results ############
-baseDir <- "~/GitHub/cail/"
-setwd(paste0(baseDir, "ProducedWater"))
+# Pickup here with previous save:
+load("working_20200728.RData")
 
 fNameRes1 <- "prof_1886.csv"
 profRes1 <- str_split(fNameRes1, "_|\\.", simplify = TRUE)[,2]

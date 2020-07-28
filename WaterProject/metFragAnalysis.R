@@ -4,50 +4,30 @@ options(stringsAsFactors = FALSE, scipen = 600, max.print = 100000)
 oldPar <- par()
 
 library(tidyverse)
-# library(doParallel)
-# library(metfRag)
 
 # baseDir <- "C:/Users/ptrainor/gdrive/CAIL/"
 baseDir <- "~/GitHub/cail/"
-setwd(paste0(baseDir, "ProducedWater"))
+setwd(paste0(baseDir, "WaterProject"))
 # End always run
 
 ############ Import enviMass profile data ############
-load("enviMassOutput_20200721.RData")
+load("enviMassOutput_20200714.RData")
 profs0 <- profs
 profs <- read.csv("profiled_peaks.csv")
 
-profInfo2 <- profs[, !grepl("\\.sample\\.", names(profs))]
-profs <- profs[, grepl("\\.sample\\.", names(profs))]
-
-names(profs) <- gsub("\\.", "", gsub("X\\d\\.sample\\.", "", names(profs)))
+profInfo2 <- profs[, !grepl("X", names(profs))]
+profs <- profs[, grepl("X", names(profs))]
 profs <- t(profs)
 colnames(profs) <- profInfo2$profile_ID
-
-# Internal standards:
-iSTDs <- readxl::read_excel("iSTDs.xlsx")
+rownames(profs) <- gsub("X", "", str_split(rownames(profs), "\\.", simplify = TRUE)[,1])
 
 # Process profile annotation data:
 profInfo <- as.data.frame(profInfo)
 profInfo$profile_ID <- as.character(as.integer(profInfo$profile_ID))
 
-############ Some processing of iSTD data ############
-# Split ID from the enviMass output:
-iSTDDF$iSTD_ID <- gsub("_none_none_none", "", iSTDDF$iSTD_ID)
-temp1 <- str_split(iSTDDF$iSTD_ID, "_", simplify = TRUE)
-iSTDDF$iSTD_ID <- temp1[,1]
-iSTDDF$adduct <- temp1[,2]
-
-# Join our db file:
-iSTDs$ID <- as.character(iSTDs$ID)
-iSTDDF <- iSTDDF %>% left_join(iSTDs, by = c("iSTD_ID" = "ID"))
-iSTDDF$iso <- ifelse(abs(iSTDDF$`m/z` - iSTDDF$Da) < .050, "0", "")
-mISTD <- iSTDDF %>% filter(adduct == "M+H" & iso == "0")
-presentISTD <- mISTD %>% group_by(file_ID, Name) %>% summarize(n = n()) %>% spread(key = "Name", value = "n")
-
 ############ Import MS/MS data ############
 # Import: 
-msmsData1 <- read.delim("MsmsIncluded_0_2020721724.txt", skip = 4, header = TRUE)
+msmsData1 <- read.delim("MsmsIncluded_0_20207271554.txt", skip = 4, header = TRUE)
 
 # Fix names:
 names(msmsData1) <- gsub("\\.", "", names(msmsData1))
@@ -90,7 +70,7 @@ msmsData2 <- apply(msmsData1, 1, function(x) makeList(x))
 names(msmsData2) <- msmsData1$AlignmentID
 
 ############ Match MS1 ############
-rtTol <- 5 / 60
+rtTol <- 15 / 60
 mzTol <- 2
 
 # Add tolerances to MS1 data of MS/MS data:
@@ -181,13 +161,13 @@ compTox$InChIKey3 <- InChIKeyTemp[,3]
 # Remove "Aux" info from InChIString:
 compTox$InChI <- str_split(compTox$InChI, "\n", simplify = TRUE)[,1]
 
-csvFile <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater/CompTox.csv"
+csvFile <- "C:/Users/ptrainor/Documents/GitHub/cail/WaterProject/CompTox.csv"
 #csvFile <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater/kegg_2017-07-23.csv"
 
 write.csv(compTox, csvFile, na = "", row.names = FALSE)
 
 # Base directory:
-baseDir2 <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater"
+baseDir2 <- "C:/Users/ptrainor/Documents/GitHub/cail/WaterProject"
 
 profList <- profInfo2$profile_ID
 for(i in 1:length(profList)){
@@ -208,7 +188,8 @@ for(i in 1:length(profList)){
                             results_filename = paste0("prof_", profID),
                             peaklist_path = paste0(baseDir2, "/msmsPeaks2/prof_", profID, ".txt"), 
                             base_dir = paste0(baseDir2, "/metFragOut2"), ppm = 2,
-                            mzabs = 0.05, frag_ppm = 100, output = "CSV")
+                            mzabs = 0.05, frag_ppm = 100, output = "CSV",
+                            num_threads = 6)
   
   # MetFrag call:
   runMetFragMy(paste0(baseDir2, "/metFragOut2/config/prof_", profID, "_config.txt"), 
@@ -218,9 +199,6 @@ for(i in 1:length(profList)){
 }
 
 ############ Pubmed online MetFrag queries ############
-# Base directory:
-baseDir2 <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater"
-
 profList <- profInfo2$profile_ID
 for(i in 1:length(profList)){
   profID <- profList[i]
@@ -249,9 +227,6 @@ for(i in 1:length(profList)){
 }
 
 ############ Import MetFrag results ############
-baseDir <- "~/GitHub/cail/"
-setwd(paste0(baseDir, "ProducedWater"))
-
 fNameRes1 <- "prof_1886.csv"
 profRes1 <- str_split(fNameRes1, "_|\\.", simplify = TRUE)[,2]
 res1 <- read.csv(paste0("metFragOut/results/", fNameRes1))

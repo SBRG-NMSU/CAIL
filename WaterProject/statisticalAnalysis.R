@@ -280,6 +280,27 @@ rm(colEntropies, iSTDCV, iSTDDF, iSTDs, medNorm, mISTD, mISTD2, mISTD3, mISTD4, 
 
 save.image("RData/working_20200714.RData")
 
+########### Overall Present vs Absent ###########
+load("RData/working_20200714.RData")
+
+pvsA <- profs2 %>% left_join(sampleAnno %>% select(Name, ST = tag3), by = c("fileName" = "Name"))
+pvsA$ST <- str_split(pvsA$ST, "-|_", simplify = TRUE)[,1]
+pvsA <- pvsA %>% mutate(pres = case_when(intensity == 0 ~ "Absent", intensity > 5*10^6 ~ "Present", 
+                                   TRUE ~ "Intermediate"))
+pvsA <- pvsA %>% group_by(profID, ST, pres) %>% summarize(n = n())
+pvsA <- pvsA %>% spread(key = pres, value = n)
+pvsA$Absent[is.na(pvsA$Absent)] <- 0
+pvsA$Intermediate[is.na(pvsA$Intermediate)] <- 0
+pvsA$Present[is.na(pvsA$Present)] <- 0
+pvsA$n <- pvsA$Absent + pvsA$Intermediate + pvsA$Present
+pvsA$AllPresent <- pvsA$Present > .6 * pvsA$n
+
+# 
+pvsA2 <- pvsA %>% select(profID, ST, AllPresent) %>% group_by(ST, AllPresent) %>% summarize(n = sum(AllPresent)) %>%
+  filter(AllPresent == TRUE) %>% select(-AllPresent)
+pvsA %>% select(profID, ST, AllPresent) %>% group_by(ST, AllPresent) %>%
+  filter(AllPresent == TRUE) %>% ungroup() %>% select(-AllPresent)
+
 ########### Algal time course ###########
 load("RData/working_20200714.RData")
 

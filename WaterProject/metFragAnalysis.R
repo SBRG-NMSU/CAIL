@@ -106,6 +106,8 @@ adductMatch <- data.frame(enviMassForm = c("M+H", "M+NH4", "M+Na", "M+K"),
                           metFragAdduct = c("[M+H]+", "[M+NH4]+", "[M+Na]+", "[M+K]+"))
 profInfo2 <- profInfo2 %>% left_join(adductMatch, by = c("adduct"="enviMassForm"))
 
+save.image("working_20200803.RData")
+
 ############ Modified Run MetFrag code ############
 runMetFragMy <-function (config_file, MetFrag_dir, CL_name, config_dir = dirname(config_file)) {
   config_exists <- file.exists(config_file) && file.exists(config_dir)
@@ -199,65 +201,114 @@ for(i in 1:length(profList)){
 }
 
 ############ Pubmed online MetFrag queries ############
-profList <- profInfo2$profile_ID
-for(i in 1:length(profList)){
-  profID <- profList[i]
-  
-  # Which MSMS from list object:
-  whichMSMS <- profInfo2$msmsMatchU[profInfo2$profile_ID == profID]
-  
-  # Write temp .txt file with MS/MS data:
-  write.table(msmsData2[[whichMSMS]]$MSMS, file = paste0(baseDir2, "/msmsPeaks/prof_", profID, ".txt"), 
-              col.names = FALSE, row.names = FALSE, sep = "\t")
-  
-  # Write configuration file for MetFrag:
-  profMZ <- profInfo2$profile_mean_mass[profInfo2$profile_ID == profID]
-  profAdduct <- profInfo2$metFragAdduct[profInfo2$profile_ID == profID]
-  ReSOLUTION::MetFragConfig(mass = profMZ, adduct_type = profAdduct, 
-                            results_filename = paste0("prof_", profID),
-                            peaklist_path = paste0(baseDir2, "/msmsPeaks/prof_", profID, ".txt"), 
-                            base_dir = paste0(baseDir2, "/metFragOut"), ppm = 2,
-                            mzabs = 0.05, frag_ppm = 100, output = "CSV")
-  
-  # MetFrag call:
-  runMetFragMy(paste0(baseDir2, "/metFragOut/config/prof_", profID, "_config.txt"), 
-               MetFrag_dir = "C:/Program Files/metfrag/", CL_name = "MetFrag2.4.5-CL.jar")
-  
-  print(i)
-}
+# profList <- profInfo2$profile_ID
+# for(i in 1:length(profList)){
+#   profID <- profList[i]
+#   
+#   # Which MSMS from list object:
+#   whichMSMS <- profInfo2$msmsMatchU[profInfo2$profile_ID == profID]
+#   
+#   # Write temp .txt file with MS/MS data:
+#   write.table(msmsData2[[whichMSMS]]$MSMS, file = paste0(baseDir2, "/msmsPeaks/prof_", profID, ".txt"), 
+#               col.names = FALSE, row.names = FALSE, sep = "\t")
+#   
+#   # Write configuration file for MetFrag:
+#   profMZ <- profInfo2$profile_mean_mass[profInfo2$profile_ID == profID]
+#   profAdduct <- profInfo2$metFragAdduct[profInfo2$profile_ID == profID]
+#   ReSOLUTION::MetFragConfig(mass = profMZ, adduct_type = profAdduct, 
+#                             results_filename = paste0("prof_", profID),
+#                             peaklist_path = paste0(baseDir2, "/msmsPeaks/prof_", profID, ".txt"), 
+#                             base_dir = paste0(baseDir2, "/metFragOut"), ppm = 2,
+#                             mzabs = 0.05, frag_ppm = 100, output = "CSV")
+#   
+#   # MetFrag call:
+#   runMetFragMy(paste0(baseDir2, "/metFragOut/config/prof_", profID, "_config.txt"), 
+#                MetFrag_dir = "C:/Program Files/metfrag/", CL_name = "MetFrag2.4.5-CL.jar")
+#   
+#   print(i)
+# }
 
 ############ Import MetFrag results ############
-fNameRes1 <- "prof_1886.csv"
-profRes1 <- str_split(fNameRes1, "_|\\.", simplify = TRUE)[,2]
-res1 <- read.csv(paste0("metFragOut/results/", fNameRes1))
+load("working_20200803.RData")
 
-# Calculate mass error:
-res1$mzAbsErr <- res1$MonoisotopicMass - profInfo2$neutral_mass[profInfo2$profile_ID == profRes1]
-res1$mzRelErr <- res1$mzAbsErr / res1$MonoisotopicMass * 1e6
+# Get all the file names from the directory:
+fNames1 <- list.files('metFragOut2/results/')
 
-## Fragment match plot:
-# Get fragments:
-msmsRes1 <- msmsData2[[profInfo2$msmsMatchU[profInfo2$profile_ID == profRes1]]]$MSMS
-msmsRes1 <- as.data.frame(msmsRes1)
-names(msmsRes1) <- c("m/z", "Intensity")
+# List for storing everything:
+res5 <- list()
+# List for storing top hit:
+res4 <- list()
 
-# Get MetFrag match results:
-expPeaksRes1 <- str_split(str_split(res1$ExplPeaks[1], ";", simplify = TRUE), "_", simplify = TRUE)
-expPeaksRes1 <- as.matrix(expPeaksRes1)
-expPeaksRes1 <- as.data.frame(apply(expPeaksRes1, 2, as.numeric))
-names(expPeaksRes1)[1] <- "m/z"
+for(i in 1:length(fNames1)){
+  fNameRes1 <- fNames1[i]
+  profRes1 <- str_split(fNameRes1, "_|\\.", simplify = TRUE)[,2]
+  res1 <- read.csv(paste0("metFragOut2/results/", fNameRes1))
+  
+  # Filter for super not sensible elements:
+  res1 <- res1 %>% filter(!grepl("Nb|\\[13C\\]|\\[14C\\]|D|Ag|Cu|Ba|Co|Zn|Ti|Hg|Pt|Si|Li|Fe|Re|Ir|Se|W|Ac|Al|Am|Sb|Ar|Be|Bi|B|Cd|Cs|Cf|Ce|Cr|Cm|CN|Es|Er|Eu|Gd|Ga|Ge|Au|Hf|Ho|In|Ir|Kr|La|Pb|Mg|Mn|Hg|Mo|Nd|Np|Ni|Os|Pd|Pu|Po|Pr|Pm|Ra|Rn|Re|Rh|Rb|Ru|Sm|Sc|Ta|Tc|Te|Tb|Tm|Sn|Ti|U|V|Xe|Yb|Y|Zn|Zr", res1$MolecularFormula))
+  
+  if(nrow(res1) > 0){
+    # Calculate mass error:
+    res1$mzAbsErr <- res1$MonoisotopicMass - profInfo2$neutral_mass[profInfo2$profile_ID == profRes1]
+    res1$mzRelErr <- abs(res1$mzAbsErr / res1$MonoisotopicMass * 1e6)
+    
+    # Add to all saved results:
+    res1$prof <- profRes1
+    res5 <- c(res5, res1)
+    
+    # Get fragments:
+    msmsRes1 <- msmsData2[[profInfo2$msmsMatchU[profInfo2$profile_ID == profRes1]]]$MSMS
+    
+    # If no MS/MS fragments then make new MS1 only res DF:
+    if(is.null(msmsRes1) || msmsRes1 == ""){
+      res2 <- res1[res1$mzRelErr == min(res1$mzRelErr),]
+      res3 <- data.frame(prof = profRes1, formula = paste(unique(res2$MolecularFormula), collapse = "|"), 
+                         id = "MS1_Only",
+                         name = paste(paste(res2$CASRN_DTXSID, res2$MolecularFormula, res2$Name, sep = ":"), collapse = "|"))
+      # Save top hit:
+      res4[[i]] <- res3
+      
+    }else{
+      # Make sure these are ordered by score:
+      res1 <- res1 %>% arrange(desc(Score))
+      
+      # Save top result:
+      res2 <- res1[1,]
+      res3 <- data.frame(prof = profRes1, formula = res2$MolecularFormula, id = "MS1 + MS2",
+                         name = paste(res2$CASRN_DTXSID, res2$Name, sep = ":"))
+      # Save top hit:
+      res4[[i]] <- res3
+      
+      ## Plot the top scoring:
+      # Fragment match:
+      msmsRes1 <- as.data.frame(msmsRes1)
+      names(msmsRes1) <- c("m/z", "Intensity")
 
-# Match fragements and MetFrag attributed:
-msmsRes1$matched <- FALSE
-msmsRes1$value <- NA
-for(i in 1:nrow(msmsRes1)){
-  which1 <- which(msmsRes1$`m/z`[i] < expPeaksRes1$`m/z` + .0001 & msmsRes1$`m/z`[i] > expPeaksRes1$`m/z` - .0001)
-  if(length(which1) > 0){
-    msmsRes1$matched[i] <- TRUE
-    msmsRes1$value[i] <- expPeaksRes1$V2[which1]
+      # Get MetFrag match results:
+      expPeaksRes1 <- str_split(str_split(res1$ExplPeaks[1], ";", simplify = TRUE), "_", simplify = TRUE)
+      expPeaksRes1 <- as.matrix(expPeaksRes1)
+      expPeaksRes1 <- as.data.frame(expPeaksRes1)
+      for(j in 1:ncol(expPeaksRes1)) expPeaksRes1[,j] <- as.numeric(expPeaksRes1[,j])
+      names(expPeaksRes1)[1] <- "m/z"
+
+      # Match fragments and MetFrag attributed:
+      msmsRes1$matched <- FALSE
+      msmsRes1$value <- NA
+      for(j in 1:nrow(msmsRes1)){
+        which1 <- which(msmsRes1$`m/z`[j] < expPeaksRes1$`m/z` + .0001 & 
+                          msmsRes1$`m/z`[j] > expPeaksRes1$`m/z` - .0001)
+        if(length(which1) > 0){
+          msmsRes1$matched[j] <- TRUE
+          msmsRes1$value[j] <- expPeaksRes1$V2[which1]
+        }
+      }
+    }
   }
+  print(i)
 }
+res4 <- do.call("rbind", res4)
 
+# Code for making a spectral match plot:
 ggplot(msmsRes1, aes(x = `m/z`, xend = `m/z`, y = 0, yend = Intensity, color = matched)) + 
   geom_segment(lwd = 1.2) + theme_bw() + scale_color_brewer(palette = "Set1")
 
@@ -266,3 +317,4 @@ ggplot(msmsRes1, aes(x = `m/z`, xend = `m/z`, y = 0, yend = Intensity)) +
   geom_segment(aes(x = `m/z`, xend = `m/z`, y = 0, yend = -value, color = "indianred4"), lwd = 1.2) + 
   geom_hline(yintercept = 0, lwd = .1) +
   theme_bw() + scale_color_brewer(palette = "Set1")
+

@@ -51,6 +51,7 @@ getMSMS <- function(x){
   x2 <- str_split(x, " ", simplify = TRUE)[1,]
   x3 <- t(sapply(x2, FUN = function(y) str_split(y, "\\:", simplify = TRUE)))
   x3 <- apply(x3, 2, as.numeric)
+  if(is.null(dim(x3))) x3 <- matrix(x3, ncol = 2, byrow = TRUE)
   return(x3)
 }
 makeList <- function(x){
@@ -200,7 +201,7 @@ for(i in 1:length(profList)){
   print(i)
 }
 
-############ Pubmed online MetFrag queries ############
+############ Pubchem online MetFrag queries ############
 # profList <- profInfo2$profile_ID
 # for(i in 1:length(profList)){
 #   profID <- profList[i]
@@ -254,7 +255,7 @@ for(i in 1:length(fNames1)){
     
     # Add to all saved results:
     res1$prof <- profRes1
-    res5 <- c(res5, res1)
+    res5[[i]] <- res1
     
     # Get fragments:
     msmsRes1 <- msmsData2[[profInfo2$msmsMatchU[profInfo2$profile_ID == profRes1]]]$MSMS
@@ -283,38 +284,53 @@ for(i in 1:length(fNames1)){
       # Fragment match:
       msmsRes1 <- as.data.frame(msmsRes1)
       names(msmsRes1) <- c("m/z", "Intensity")
+      msmsRes1$Matched <- "No"
+      msmsRes1$value <- NA
 
       # Get MetFrag match results:
-      expPeaksRes1 <- str_split(str_split(res1$ExplPeaks[1], ";", simplify = TRUE), "_", simplify = TRUE)
-      expPeaksRes1 <- as.matrix(expPeaksRes1)
-      expPeaksRes1 <- as.data.frame(expPeaksRes1)
-      for(j in 1:ncol(expPeaksRes1)) expPeaksRes1[,j] <- as.numeric(expPeaksRes1[,j])
-      names(expPeaksRes1)[1] <- "m/z"
-
-      # Match fragments and MetFrag attributed:
-      msmsRes1$matched <- FALSE
-      msmsRes1$value <- NA
-      for(j in 1:nrow(msmsRes1)){
-        which1 <- which(msmsRes1$`m/z`[j] < expPeaksRes1$`m/z` + .0001 & 
-                          msmsRes1$`m/z`[j] > expPeaksRes1$`m/z` - .0001)
-        if(length(which1) > 0){
-          msmsRes1$matched[j] <- TRUE
-          msmsRes1$value[j] <- expPeaksRes1$V2[which1]
+      if(!is.na(res1$ExplPeaks[1])){
+        expPeaksRes1 <- str_split(str_split(res1$ExplPeaks[1], ";", simplify = TRUE), "_", simplify = TRUE)
+        expPeaksRes1 <- as.matrix(expPeaksRes1)
+        expPeaksRes1 <- as.data.frame(expPeaksRes1)
+        for(j in 1:ncol(expPeaksRes1)) expPeaksRes1[,j] <- as.numeric(expPeaksRes1[,j])
+        names(expPeaksRes1)[1] <- "m/z"
+        
+        # Match fragments and MetFrag attributed:
+        for(j in 1:nrow(msmsRes1)){
+          which1 <- which(msmsRes1$`m/z`[j] < expPeaksRes1$`m/z` + .0001 & 
+                            msmsRes1$`m/z`[j] > expPeaksRes1$`m/z` - .0001)
+          if(length(which1) > 0){
+            msmsRes1$Matched[j] <- "Yes"
+            msmsRes1$value[j] <- expPeaksRes1$V2[which1]
+          }
         }
       }
+      
+      # Make a spectral match plot:
+      tempInfo <- profInfo2[profInfo2$profile_ID == profRes1,]
+      png(file = paste0("metFragOut2/specMatchPlots/", "profMatch_", tempInfo$profile_ID, ".png"),
+          height = 5, width = 7, units = "in", res = 300)
+      p1 <- ggplot(msmsRes1, aes(x = `m/z`, xend = `m/z`, y = 0, yend = Intensity, color = Matched)) + 
+        geom_segment(lwd = 1.2) + theme_bw() + scale_color_brewer(palette = "Set1") +
+        labs(y = "Intensity", title = paste("Profile:", tempInfo$profile_ID), 
+             subtitle = paste("Precursor m/z:", round(tempInfo$profile_mean_mass,4), "RT:", tempInfo$profile_mean_RT_min))
+      show(p1)
+      dev.off()
+      
+      png(file = paste0("metFragOut2/specMatchPlots/", "profScore_", tempInfo$profile_ID, ".png"),
+          height = 7, width = 7, units = "in", res = 300)
+      p2 <- ggplot(msmsRes1, aes(x = `m/z`, xend = `m/z`, y = 0, yend = Intensity)) + 
+        geom_segment(lwd = 1.2, color = "#377EB8") + 
+        geom_segment(aes(x = `m/z`, xend = `m/z`, y = 0, yend = -value), color = "#E41A1C", lwd = 1.2) + 
+        geom_hline(yintercept = 0, lwd = .1) + theme_bw() + 
+        labs(y = "Intensity (-Fragment Score)", title = paste("Profile:", tempInfo$profile_ID), 
+             subtitle = paste("Precursor m/z:", round(tempInfo$profile_mean_mass,4), "RT:", tempInfo$profile_mean_RT_min)) 
+      show(p2)
+      dev.off()
     }
   }
   print(i)
 }
 res4 <- do.call("rbind", res4)
-
-# Code for making a spectral match plot:
-ggplot(msmsRes1, aes(x = `m/z`, xend = `m/z`, y = 0, yend = Intensity, color = matched)) + 
-  geom_segment(lwd = 1.2) + theme_bw() + scale_color_brewer(palette = "Set1")
-
-ggplot(msmsRes1, aes(x = `m/z`, xend = `m/z`, y = 0, yend = Intensity)) + 
-  geom_segment(lwd = 1.2, color = "dodgerblue4") + 
-  geom_segment(aes(x = `m/z`, xend = `m/z`, y = 0, yend = -value, color = "indianred4"), lwd = 1.2) + 
-  geom_hline(yintercept = 0, lwd = .1) +
-  theme_bw() + scale_color_brewer(palette = "Set1")
+res5 <- do.call("rbind", res5)
 

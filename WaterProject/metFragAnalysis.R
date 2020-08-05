@@ -165,8 +165,6 @@ compTox$InChIKey3 <- InChIKeyTemp[,3]
 compTox$InChI <- str_split(compTox$InChI, "\n", simplify = TRUE)[,1]
 
 csvFile <- "C:/Users/ptrainor/Documents/GitHub/cail/WaterProject/CompTox.csv"
-#csvFile <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater/kegg_2017-07-23.csv"
-
 write.csv(compTox, csvFile, na = "", row.names = FALSE)
 
 # Base directory:
@@ -334,3 +332,7 @@ for(i in 1:length(fNames1)){
 res4 <- do.call("rbind", res4)
 res5 <- do.call("rbind", res5)
 
+topHit <- res4
+allHits <- res5
+
+save(topHit, allHits, file = "metFragCand_20200804.RData")

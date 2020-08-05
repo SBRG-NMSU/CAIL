@@ -71,22 +71,8 @@ fenIn$feature <- as.character(as.integer(fenIn$feature))
 # Unique:
 fenIn2 <- fenIn %>% select(feature, precursorMZ, RT) %>% unique()
 
-# Import MS/MS data:
-msmsData <- readxl::read_excel("AE_MS2_CmpID/AE_CmpdID_20200620.xlsx", sheet = "peakData")
-msmsData$feature <- as.character(msmsData$feature)
-
-############ Some processing of MS/MS data ############
-msmsDataTemp1 <- str_split(msmsData$MS2Spectrum, " ")
-procFun0 <- function(x){
-  temp1 <- str_split(x, ":", simplify = TRUE)
-  temp1 <- as.data.frame(temp1)
-  names(temp1) <- c("mz", "intensity")
-  temp1 <- temp1 %>% filter(intensity > 100)
-  return(temp1)
-}
-msmsData2 <- lapply(msmsDataTemp1, procFun0)
-names(msmsData2) <- msmsData$feature
-rm(msmsDataTemp1)
+# Import MetFrag results:
+load(file = "RData/metFragCand_20200804.RData")
 
 ############ Some processing of iSTD data ############
 # Split ID from the enviMass output:
@@ -368,17 +354,18 @@ AE_TC$slope1q <- p.adjust(AE_TC$slope1p, method = "fdr")
 AE_TC$slope34q <- p.adjust(AE_TC$slope34p, method = "fdr")
 
 # Join possible annotation data:
-AE_TC$posFenIn <- ""
-for(i in 1:nrow(AE_TC)){
-  pMatch1 <- abs((AE_TC$mean_mz[i] - fenIn2$precursorMZ) / fenIn2$precursorMZ * 10^6) < 1
-  pMatch2 <- fenIn2[pMatch1, ]
-  if(nrow(pMatch2) > 0){
-    pMatch3 <- pMatch2$RT > AE_TC$mean_RT[i] / 60 - .5 & pMatch2$RT < AE_TC$mean_RT[i] / 60 + .5
-    if(nrow(pMatch2[pMatch3,]) > 0){
-      AE_TC$posFenIn[i] <- paste(pMatch2$feature[pMatch3], collapse = ";")
-    }
-  }
-}
+AE_TC <- AE_TC %>% left_join(topHit, by = c("profID" = "prof"))
+# AE_TC$posFenIn <- ""
+# for(i in 1:nrow(AE_TC)){
+#   pMatch1 <- abs((AE_TC$mean_mz[i] - fenIn2$precursorMZ) / fenIn2$precursorMZ * 10^6) < 1
+#   pMatch2 <- fenIn2[pMatch1, ]
+#   if(nrow(pMatch2) > 0){
+#     pMatch3 <- pMatch2$RT > AE_TC$mean_RT[i] / 60 - .5 & pMatch2$RT < AE_TC$mean_RT[i] / 60 + .5
+#     if(nrow(pMatch2[pMatch3,]) > 0){
+#       AE_TC$posFenIn[i] <- paste(pMatch2$feature[pMatch3], collapse = ";")
+#     }
+#   }
+# }
 
 # Volcano plots:
 # png(filename = paste0("./Plots/AE1_TC_Volcano_",gsub("-", "", Sys.Date()), ".png"),

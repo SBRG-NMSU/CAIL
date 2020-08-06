@@ -51,12 +51,16 @@ sampleAnno$Name <- factor(sampleAnno$Name, levels = sampleAnno$Name[sampleAnno$m
 # Load profile data:
 load("RData/enviMassOutput_20200714.RData")
 rm(profs)
-profs <- read.csv("RData/profiled_peaks_20200714.csv")
+profs <- read.csv("RData/profiled_peaks.csv")
 profInfo2 <- profs[, !grepl("X", names(profs))]
 profs <- profs[, grepl("X", names(profs))]
 profs <- t(profs)
 colnames(profs) <- profInfo2$profile_ID
 rownames(profs) <- gsub("X", "", str_split(rownames(profs), "\\.", simplify = TRUE)[,1])
+
+# Process neutral mass / adduct data:
+profInfo2$profile_ID <- as.character(profInfo2$profile_ID)
+profInfo2$adduct <- gsub("\\*", "", str_split(profInfo2$neutral_mass_info, " / ", simplify = TRUE)[,1])
 
 # Internal standards:
 iSTDs <- readxl::read_excel("iSTDs.xlsx")
@@ -343,63 +347,43 @@ for(i in 1:nrow(AE_TC)){
   print(i)
 }
 
-# Add profile m/z and RT:
-AE_TC <- AE_TC %>% left_join(profInfo %>% 
-                               select(profile_ID, inBlind = `in_blind?`, mean_mz, mean_RT), 
-                             by = c("profID" = "profile_ID"))
-
 # Adjusted p-values:
 AE_TC$AE34minAE1q <- p.adjust(AE_TC$AE34minAE1p, method = "fdr")
 AE_TC$slope1q <- p.adjust(AE_TC$slope1p, method = "fdr")
 AE_TC$slope34q <- p.adjust(AE_TC$slope34p, method = "fdr")
 
-# Join possible annotation data:
-AE_TC <- AE_TC %>% left_join(topHit, by = c("profID" = "prof"))
-# AE_TC$posFenIn <- ""
-# for(i in 1:nrow(AE_TC)){
-#   pMatch1 <- abs((AE_TC$mean_mz[i] - fenIn2$precursorMZ) / fenIn2$precursorMZ * 10^6) < 1
-#   pMatch2 <- fenIn2[pMatch1, ]
-#   if(nrow(pMatch2) > 0){
-#     pMatch3 <- pMatch2$RT > AE_TC$mean_RT[i] / 60 - .5 & pMatch2$RT < AE_TC$mean_RT[i] / 60 + .5
-#     if(nrow(pMatch2[pMatch3,]) > 0){
-#       AE_TC$posFenIn[i] <- paste(pMatch2$feature[pMatch3], collapse = ";")
-#     }
-#   }
-# }
+# Add profile m/z and RT:
+AE_TC <- AE_TC %>% left_join(profInfo2 %>% 
+      select(profile_ID, profile_mean_mass, profile_mean_RT_min, homologue, neutral_mass, adduct), 
+      by = c("profID" = "profile_ID")) %>% left_join(topHit, by = c("profID" = "prof")) %>% left_join(linksDF)
 
 # Volcano plots:
 # png(filename = paste0("./Plots/AE1_TC_Volcano_",gsub("-", "", Sys.Date()), ".png"),
 #     height = 7, width = 8, units = "in", res = 600)
-EnhancedVolcano::EnhancedVolcano(AE_TC, 
-           lab = AE_TC$profID, x = "slope1", y = "slope1q", pCutoff = .05, 
-           FCcutoff = 0.05, xlab = "Slope", ylab = expression(paste(-log[10],"(Adjusted p-value)")),
-           legendPosition = "none", caption = "", pointSize = 1.25, labSize = 1.25, title = "", subtitle = "",
-           xlim = c(-.15, .15), ylim = c(0, 2.5)) 
-# dev.off()
-# png(filename = paste0("./Plots/AE1_TC_VolcanoNOLab_",gsub("-", "", Sys.Date()), ".png"),
-#     height = 7, width = 8, units = "in", res = 600)
-EnhancedVolcano::EnhancedVolcano(AE_TC, 
-     lab = "", x = "slope1", y = "slope1q", pCutoff = .05, 
-     FCcutoff = 0.05, xlab = "Slope", ylab = expression(paste(-log[10],"(Adjusted p-value)")),
-     legendPosition = "none", caption = "", title = "", subtitle = "",
-     xlim = c(-.15, .15), ylim = c(0, 2.5)) 
+AE_TC2 <- AE_TC
+AE_TC2$lab <- AE_TC2$profID
+AE_TC2$lab[-log10(AE_TC2$slope1q) < 1.30103 | abs(AE_TC2$slope1) < .05] <- ""
+set.seed(3)
+ggplot(AE_TC2, aes(x = slope1, y = -log10(slope1q), label = lab)) + 
+  geom_point(pch = 21,color = "grey30", fill = "dodgerblue", alpha = .5) + 
+  geom_hline(yintercept = 1.30103, lty = 2) + geom_vline(xintercept = -.05, lty = 2) + 
+  geom_vline(xintercept = .05, lty = 2) + 
+  geom_text_repel(size = 2, segment.colour = "grey30", segment.alpha = .5, segment.size = .5) +
+  theme_bw() + labs(x = "AE-1 Time-Course Slope", y = "-Log10(q-value)")
 # dev.off()
 
 # png(filename = paste0("./Plots/AE34minusAE1_Volcano_",gsub("-", "", Sys.Date()), ".png"),
 #     height = 7, width = 8, units = "in", res = 600)
-EnhancedVolcano::EnhancedVolcano(AE_TC, 
-     lab = AE_TC$profID, x = "AE34minAE1", y = "AE34minAE1q", pCutoff = .05, 
-     FCcutoff = 0.5, xlab = "AE3/4 - AE1", ylab = expression(paste(-log[10],"(Adjusted p-value)")), 
-     legendPosition = "none", caption = "",  ylim = c(0, 6.5), xlim = c(-2.5, 2.5), 
-     pointSize = .95, labSize = .95, title = "", subtitle = "")
-# dev.off()
-# png(filename = paste0("./Plots/AE34minusAE1_VolcanoNOLab_",gsub("-", "", Sys.Date()), ".png"),
-#     height = 7, width = 8, units = "in", res = 600)
-EnhancedVolcano::EnhancedVolcano(AE_TC, 
-     lab = "", x = "AE34minAE1", y = "AE34minAE1q", pCutoff = .05, 
-     FCcutoff = 0.5, xlab = "AE3/4 - AE1", ylab = expression(paste(-log[10],"(Adjusted p-value)")), 
-     legendPosition = "none", caption = "", ylim = c(0, 6.5), xlim = c(-2.5, 2.5), 
-     title = "", subtitle = "")
+AE_TC2 <- AE_TC
+AE_TC2$lab <- AE_TC2$profID
+AE_TC2$lab[-log10(AE_TC2$AE34minAE1q) < 1.30103 | abs(AE_TC2$AE34minAE1) < .75] <- ""
+set.seed(3)
+ggplot(AE_TC2, aes(x = AE34minAE1, y = -log10(AE34minAE1q), label = lab)) + 
+  geom_point(pch = 21,color = "grey30", fill = "dodgerblue", alpha = .5) + 
+  geom_hline(yintercept = 1.30103, lty = 2) + geom_vline(xintercept = -.75, lty = 2) + 
+  geom_vline(xintercept = .75, lty = 2) + 
+  geom_text_repel(size = 2, segment.colour = "grey30", segment.alpha = .5, segment.size = .5) +
+  theme_bw() + xlim(-2, 2.25) + labs(x = "AE-3/4 - AE-1", y = "-Log10(q-value)")
 # dev.off()
 
 # Specific profiles:
@@ -423,11 +407,15 @@ ggplot(profs3 %>% filter(profID == 16791), aes(x = cycle, color = whichSP, y = l
 # dev.off()
 
 # Export time-course data:
+AE_TC <- AE_TC %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
+                          adduct, formula, howID = id, topCandidate = name, links,
+                          slope1, slope34, AE34minusAE1 = AE34minAE1, slope1p, slope34p, AE34minusAE1p = AE34minAE1p,
+                          slope1q, slope34q, AE34minusAE1q = AE34minAE1q)
 writexl::write_xlsx(AE_TC, path = paste0("Results/AE_Timecourse_", gsub("-", "", Sys.Date()), ".xlsx"))
 
 rm(lm0, lm1, p1, p2, p3, p4, p5, pca1, pca1DF, pMatch2, temp1, temp2, temp3, colEntropies,
    iSTDCV, iSTDDF, iSTDs, medByFile, medNorm, mISTD, mISTD2, mISTD3, mISTD4, profs2b, 
-   pMatch1, pMatch3, i, profs3)
+   pMatch1, pMatch3, i, profs3, AE_TC2)
 
 # Save:
 save.image("RData/working_20200714b.RData")
@@ -460,24 +448,24 @@ for(i in 1:nrow(Pres)){
   temp1 <- profs3 %>% filter(profID == Pres$profID[i])
   
   # Tabulate present vs. absent:
-  temp2 <- as.data.frame(xtabs(~whichSP + pres, data = temp1)) 
+  temp2 <- as.data.frame(xtabs(~pres + whichSP, data = temp1)) 
   temp2$pres <- paste0(temp2$pres, "_", temp2$whichSP)
   temp2 <- temp2 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
   names(temp2) <- paste0(names(temp2), "_Freq")
   
   # Tabulate proportions:
-  temp3 <- as.data.frame(prop.table(xtabs(~whichSP + pres, data = temp1), margin = 1))
+  temp3 <- as.data.frame(prop.table(xtabs(~pres + whichSP, data = temp1), margin = 2))
   temp3$pres <- paste0(temp3$pres, "_", temp3$whichSP)
   temp3 <- temp3 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
   names(temp3) <- paste0(names(temp3), "_Prop")
   
-  # Wilcoxon Rank-Sum:
-  temp1$pres2 <- as.integer(temp1$pres)
-  if(length(table(temp1$pres2)) > 1){
-    wc1 <- wilcox.test(pres2 ~ whichSP, exact = FALSE, data = temp1)
+  # Independence test:
+  if(length(table(as.integer(temp1$pres))) > 1){
+    test1 <- coin::independence_test(pres ~ whichSP, data = temp1)
+    Pres$pValue[i] <- pnorm(abs(test1@statistic@teststatistic), lower.tail = FALSE) * 2
+    temp1$pres2 <- as.integer(temp1$pres)
     wc2 <- temp1 %>% group_by(whichSP) %>% summarize(mean = mean(pres2))
     Pres$diff[i] <- wc2$mean[2] - wc2$mean[1]
-    Pres$pValue[i] <- wc1$p.value
   }else{
     Pres$diff[i] <- 0
     Pres$pValue[i] <- 1
@@ -493,41 +481,48 @@ Pres <- Pres %>% left_join(Pres2)
 # Adjusted p-values:
 Pres$qValue <- p.adjust(Pres$pValue, method = "fdr")
 
-# Add profile m/z and RT:
-Pres <- Pres %>% left_join(profInfo %>% 
-                               select(profile_ID, inBlind = `in_blind?`, mean_mz, mean_RT), 
-                             by = c("profID" = "profile_ID"))
+# Join with annotation data:
+Pres <- Pres %>% left_join(profInfo2 %>% 
+   select(profile_ID, profile_mean_mass, profile_mean_RT_min, homologue, neutral_mass, adduct), 
+   by = c("profID" = "profile_ID")) %>% left_join(topHit, by = c("profID" = "prof")) %>% left_join(linksDF)
+Pres <- Pres %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
+                 adduct, formula, howID = id, topCandidate = name, links,
+                `Absent_AE-1_Freq`, `Absent_AE-3/4_Freq`, `Intermediate_AE-1_Freq`, `Intermediate_AE-3/4_Freq`,
+                `Present_AE-1_Freq`, `Present_AE-3/4_Freq`, `Absent_AE-1_Prop`, `Absent_AE-3/4_Prop`,
+                `Intermediate_AE-1_Prop`, `Intermediate_AE-3/4_Prop`, `Present_AE-1_Prop`, `Present_AE-3/4_Prop`, 
+                MeanDifference = diff, pValue, qValue)
 
-# Join possible annotation data:
-Pres$posFenIn <- ""
-for(i in 1:nrow(Pres)){
-  pMatch1 <- abs((Pres$mean_mz[i] - fenIn2$precursorMZ) / fenIn2$precursorMZ * 10^6) < 1
-  pMatch2 <- fenIn2[pMatch1, ]
-  if(nrow(pMatch2) > 0){
-    pMatch3 <- pMatch2$RT > Pres$mean_RT[i] / 60 - .5 & pMatch2$RT < Pres$mean_RT[i] / 60 + .5
-    if(nrow(pMatch2[pMatch3,]) > 0){
-      Pres$posFenIn[i] <- paste(pMatch2$feature[pMatch3], collapse = ";")
-    }
-  }
-}
-
-# png(filename = "./Plots/AE_Present_5907.png", height = 5, width = 6, units = "in", res = 600)
-set.seed(3)
-ggplot(profs3 %>% filter(profID == 5907), aes(x = whichSP, color = whichSP, y = intensity, label = fileName)) + 
-  geom_point() + geom_text_repel() + theme_bw() + 
-  labs(title = "Profile #5907: AE-1 and AE-3/4", subtitle = "m/z: 182.0093; RT: 9.34 min",
-       x = "Sampling Point", y = "Intensity", color = "Sampling\nPoint")
+# png(filename = paste0("./Plots/AEPresent_Volcano_",gsub("-", "", Sys.Date()), ".png"),
+#     height = 7, width = 8, units = "in", res = 600)
+Pres2 <- Pres
+Pres2$lab <- Pres2$profID
+Pres2$lab[-log10(Pres2$qValue) < -log10(.1) | abs(Pres2$MeanDifference) < 1.25] <- ""
+set.seed(33)
+ggplot(Pres2, aes(x = MeanDifference, y = -log10(qValue), label = lab)) + 
+  geom_point(pch = 21,color = "grey30", fill = "dodgerblue", alpha = .5) + 
+  geom_hline(yintercept =-log10(.1), lty = 2) + geom_vline(xintercept = -1.25, lty = 2) + 
+  geom_vline(xintercept = 1.25, lty = 2) + 
+  geom_text_repel(size = 1.5, segment.colour = "grey30", segment.alpha = .35, segment.size = .5) +
+  theme_bw() + labs(x = "Mean Difference", y = "-Log10(q-value)")
 # dev.off()
+
+png(filename = "./Plots/AE_Present_45881.png", height = 5, width = 6, units = "in", res = 600)
+set.seed(3)
+ggplot(profs3 %>% filter(profID == 45881), aes(x = whichSP, color = whichSP, y = intensity, label = fileName)) + 
+  geom_point() + geom_text_repel() + theme_bw() + 
+  labs(title = "Profile #45881: AE-1 and AE-3/4", subtitle = "m/z: 453.3436; RT: 7.09 min",
+       x = "Sampling Point", y = "Intensity", color = "Sampling\nPoint")
+dev.off()
 
 # Export:
 writexl::write_xlsx(Pres, path = paste0("Results/AE_Pres_", gsub("-", "", Sys.Date()), ".xlsx"))
 
 # Save and cleanup:
 Pres_AE <- Pres
-rm(Pres, Pres2, wc1, wc2, temp1, temp2, temp3, profs3)
+rm(Pres, Pres2, wc1, wc2, temp1, temp2, temp3, profs3, test1)
 save.image("RData/working_20200702c.RData")
 
-########### Secondary effluent to Product water ###########
+########### Secondary Effluent to Product water ###########
 load("RData/working_20200702c.RData")
 
 # First get data for the profiles for Secondary Effluent and product water:
@@ -541,6 +536,7 @@ table(profs3$fileName)
 profs3$cycle <- as.integer(str_split(profs3$fileName, "_", simplify = TRUE)[,2])
 profs3$logIntensity <- log10(profs3$intensity)
 profs3$whichSP <- ifelse(grepl("RO", profs3$fileName), "RO", "SE")
+profs3$whichSP <- factor(profs3$whichSP)
 
 # Add indicator for absent, intermediate, present:
 profs3 <- profs3 %>% mutate(pres = case_when(intensity == 0 ~ "Absent", intensity > 5*10^6 ~ "Present", 
@@ -561,24 +557,24 @@ for(i in 1:nrow(Pres)){
   temp1 <- profs3 %>% filter(profID == Pres$profID[i])
   
   # Tabulate present vs. absent:
-  temp2 <- as.data.frame(xtabs(~whichSP + pres, data = temp1)) 
+  temp2 <- as.data.frame(xtabs(~pres + whichSP, data = temp1)) 
   temp2$pres <- paste0(temp2$pres, "_", temp2$whichSP)
   temp2 <- temp2 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
   names(temp2) <- paste0(names(temp2), "_Freq")
   
   # Tabulate proportions:
-  temp3 <- as.data.frame(prop.table(xtabs(~whichSP + pres, data = temp1), margin = 1))
+  temp3 <- as.data.frame(prop.table(xtabs(~pres + whichSP, data = temp1), margin = 2))
   temp3$pres <- paste0(temp3$pres, "_", temp3$whichSP)
   temp3 <- temp3 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
   names(temp3) <- paste0(names(temp3), "_Prop")
   
-  # Wilcoxon Rank-Sum:
-  temp1$pres2 <- as.integer(temp1$pres)
-  if(length(table(temp1$pres2)) > 1){
-    wc1 <- wilcox.test(pres2 ~ whichSP, exact = FALSE, data = temp1)
+  # Independence test:
+  if(length(table(as.integer(temp1$pres))) > 1){
+    test1 <- coin::independence_test(pres ~ whichSP, data = temp1)
+    Pres$pValue[i] <- pnorm(abs(test1@statistic@teststatistic), lower.tail = FALSE) * 2
+    temp1$pres2 <- as.integer(temp1$pres)
     wc2 <- temp1 %>% group_by(whichSP) %>% summarize(mean = mean(pres2))
     Pres$diff[i] <- wc2$mean[2] - wc2$mean[1]
-    Pres$pValue[i] <- wc1$p.value
   }else{
     Pres$diff[i] <- 0
     Pres$pValue[i] <- 1
@@ -594,10 +590,30 @@ Pres <- Pres %>% left_join(Pres2)
 # Adjusted p-values:
 Pres$qValue <- p.adjust(Pres$pValue, method = "fdr")
 
-# Add profile m/z and RT:
-Pres <- Pres %>% left_join(profInfo %>% 
-                                   select(profile_ID, inBlind = `in_blind?`, mean_mz, mean_RT), 
-                                 by = c("profID" = "profile_ID"))
+# Join with annotation data:
+Pres <- Pres %>% left_join(profInfo2 %>% 
+     select(profile_ID, profile_mean_mass, profile_mean_RT_min, homologue, neutral_mass, adduct), 
+     by = c("profID" = "profile_ID")) %>% left_join(topHit, by = c("profID" = "prof")) %>% left_join(linksDF)
+Pres <- Pres %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
+        adduct, formula, howID = id, topCandidate = name, links,
+        `Absent_SE_Freq`, `Absent_RO_Freq`, `Intermediate_SE_Freq`, `Intermediate_RO_Freq`,
+        `Present_SE_Freq`, `Present_RO_Freq`, `Absent_SE_Prop`, `Absent_RO_Prop`,
+        `Intermediate_SE_Prop`, `Intermediate_RO_Prop`, `Present_SE_Prop`, `Present_RO_Prop`, 
+        MeanDifference = diff, pValue, qValue)
+
+# png(filename = paste0("./Plots/SE_RPresent_Volcano_",gsub("-", "", Sys.Date()), ".png"),
+#     height = 7, width = 8, units = "in", res = 600)
+Pres2 <- Pres
+Pres2$lab <- Pres2$profID
+Pres2$lab[-log10(Pres2$qValue) < -log10(.1) | abs(Pres2$MeanDifference) < 1.25] <- ""
+set.seed(33)
+ggplot(Pres2, aes(x = MeanDifference, y = -log10(qValue), label = lab)) + 
+  geom_point(pch = 21,color = "grey30", fill = "dodgerblue", alpha = .5) + 
+  geom_hline(yintercept =-log10(.1), lty = 2) + geom_vline(xintercept = -1.25, lty = 2) + 
+  geom_vline(xintercept = 1.25, lty = 2) + 
+  geom_text_repel(size = 1.5, segment.colour = "grey30", segment.alpha = .35, segment.size = .5) +
+  theme_bw() + labs(x = "Mean Difference", y = "-Log10(q-value)")
+# dev.off()
 
 # Export:
 writexl::write_xlsx(Pres, path = paste0("Results/SE_Product_Pres_", gsub("-", "", Sys.Date()), ".xlsx"))

@@ -506,13 +506,13 @@ ggplot(Pres2, aes(x = MeanDifference, y = -log10(qValue), label = lab)) +
   theme_bw() + labs(x = "Mean Difference", y = "-Log10(q-value)")
 # dev.off()
 
-png(filename = "./Plots/AE_Present_45881.png", height = 5, width = 6, units = "in", res = 600)
+# png(filename = "./Plots/AE_Present_45881.png", height = 5, width = 6, units = "in", res = 600)
 set.seed(3)
 ggplot(profs3 %>% filter(profID == 45881), aes(x = whichSP, color = whichSP, y = intensity, label = fileName)) + 
   geom_point() + geom_text_repel() + theme_bw() + 
   labs(title = "Profile #45881: AE-1 and AE-3/4", subtitle = "m/z: 453.3436; RT: 7.09 min",
        x = "Sampling Point", y = "Intensity", color = "Sampling\nPoint")
-dev.off()
+# dev.off()
 
 # Export:
 writexl::write_xlsx(Pres, path = paste0("Results/AE_Pres_", gsub("-", "", Sys.Date()), ".xlsx"))
@@ -522,10 +522,10 @@ Pres_AE <- Pres
 rm(Pres, Pres2, wc1, wc2, temp1, temp2, temp3, profs3, test1)
 save.image("RData/working_20200702c.RData")
 
-########### Secondary Effluent to Product water ###########
+########### Secondary Effluent to RO ###########
 load("RData/working_20200702c.RData")
 
-# First get data for the profiles for Secondary Effluent and product water:
+# First get data for the profiles for Secondary Effluent and RO:
 profs3 <- profs2 %>% filter((grepl("SE-", fileName) & !grepl("Pool", fileName)) | 
                               (grepl("RO_", fileName) & !grepl("Secondary", fileName)))
 # Toss out bad RO samples:
@@ -601,8 +601,8 @@ Pres <- Pres %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min
         `Intermediate_SE_Prop`, `Intermediate_RO_Prop`, `Present_SE_Prop`, `Present_RO_Prop`, 
         MeanDifference = diff, pValue, qValue)
 
-png(filename = paste0("./Plots/SE_RO_Present_Volcano_",gsub("-", "", Sys.Date()), ".png"),
-    height = 7, width = 8, units = "in", res = 600)
+# png(filename = paste0("./Plots/SE_RO_Present_Volcano_",gsub("-", "", Sys.Date()), ".png"),
+#     height = 7, width = 8, units = "in", res = 600)
 Pres2 <- Pres
 Pres2 <- Pres2 %>% group_by(MeanDifference, qValue) %>% mutate(lab = n())
 Pres2$lab[-log10(Pres2$qValue) < -log10(0.001) | abs(Pres2$MeanDifference) < 1.5] <- ""
@@ -614,13 +614,245 @@ ggplot(Pres2, aes(x = MeanDifference, y = -log10(qValue), label = lab)) +
   geom_vline(xintercept = 1.5, lty = 2) + 
   geom_text_repel(size = 3, segment.colour = "grey30", segment.alpha = .35, segment.size = .5) +
   theme_bw() + labs(x = "Mean Difference", y = "-Log10(q-value)")
-dev.off()
+# dev.off()
+
+# png(filename = "./Plots/SE_RO_50460.png", height = 5, width = 6, units = "in", res = 600)
+set.seed(3)
+ggplot(profs3 %>% filter(profID == 50460), aes(x = whichSP, color = whichSP, y = intensity, label = fileName)) + 
+  geom_point() + geom_text_repel(size = 1.25, segment.size = .25, segment.alpha = .25) + theme_bw() + 
+  labs(title = "Profile #50460: SE and RO", subtitle = "m/z: 507.271942; RT:  10.56 min",
+       x = "Sampling Point", y = "Intensity", color = "Sampling\nPoint")
+# dev.off()
 
 # Export:
 writexl::write_xlsx(Pres, path = paste0("Results/SE_Product_Pres_", gsub("-", "", Sys.Date()), ".xlsx"))
 
 # Save and cleanup:
-Pres_SE_Product <- Pres
+Pres_SE_RO <- Pres
 rm(Pres, Pres2, test1, temp1, temp2, temp3, profs3)
 save.image("RData/working_20200702d.RData")
 
+########### Secondary Effluent to Secondary RO ###########
+load("RData/working_20200702d.RData")
+
+# First get data for the profiles for Secondary Effluent and product water:
+profs3 <- profs2 %>% filter((grepl("SE-", fileName) & !grepl("Pool", fileName)) | 
+                              (grepl("RO_", fileName) & grepl("Secondary", fileName)))
+profs3$fileName <- factor(profs3$fileName)
+table(profs3$fileName)
+
+profs3$cycle <- as.integer(str_split(profs3$fileName, "_", simplify = TRUE)[,2])
+profs3$logIntensity <- log10(profs3$intensity)
+profs3$whichSP <- ifelse(grepl("SecondaryRO", profs3$fileName), "SecondaryRO", "SE")
+profs3$whichSP <- factor(profs3$whichSP)
+
+# Add indicator for absent, intermediate, present:
+profs3 <- profs3 %>% mutate(pres = case_when(intensity == 0 ~ "Absent", intensity > 5*10^6 ~ "Present", 
+                                             TRUE ~ "Intermediate"))
+profs3$pres <- factor(profs3$pres, levels = c("Absent", "Intermediate", "Present"), ordered = TRUE)
+
+# Remove those absent in all:
+# Starting count:
+profs3 %>% select(profID) %>% unique() %>% nrow() # 53,672
+profs3 <- profs3 %>% group_by(profID) %>% mutate(countPresent = sum(pres == "Present"), 
+                                                 removeThis = countPresent == 0) %>% filter(!removeThis) %>% select(-countPresent, -removeThis)
+profs3 %>% select(profID) %>% unique() %>% nrow() # 10,574
+
+Pres <- data.frame(profID = unique(profs3$profID), diff = NA, pValue = NA)
+Pres2 <- list()
+for(i in 1:nrow(Pres)){
+  # Find all intensity for an individual feature:
+  temp1 <- profs3 %>% filter(profID == Pres$profID[i])
+  
+  # Tabulate present vs. absent:
+  temp2 <- as.data.frame(xtabs(~pres + whichSP, data = temp1)) 
+  temp2$pres <- paste0(temp2$pres, "_", temp2$whichSP)
+  temp2 <- temp2 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
+  names(temp2) <- paste0(names(temp2), "_Freq")
+  
+  # Tabulate proportions:
+  temp3 <- as.data.frame(prop.table(xtabs(~pres + whichSP, data = temp1), margin = 2))
+  temp3$pres <- paste0(temp3$pres, "_", temp3$whichSP)
+  temp3 <- temp3 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
+  names(temp3) <- paste0(names(temp3), "_Prop")
+  
+  # Independence test:
+  if(length(table(as.integer(temp1$pres))) > 1){
+    test1 <- coin::independence_test(pres ~ whichSP, data = temp1)
+    Pres$pValue[i] <- pnorm(abs(test1@statistic@teststatistic), lower.tail = FALSE) * 2
+    temp1$pres2 <- as.integer(temp1$pres)
+    wc2 <- temp1 %>% group_by(whichSP) %>% summarize(mean = mean(pres2))
+    Pres$diff[i] <- wc2$mean[2] - wc2$mean[1]
+  }else{
+    Pres$diff[i] <- 0
+    Pres$pValue[i] <- 1
+  }
+  
+  # Eports:
+  Pres2[[i]] <- cbind(profID = Pres$profID[i], temp2, temp3)
+  print(i)
+}
+Pres2 <- do.call("rbind", Pres2)
+Pres <- Pres %>% left_join(Pres2)
+
+# Adjusted p-values:
+Pres$qValue <- p.adjust(Pres$pValue, method = "fdr")
+
+# Join with annotation data:
+Pres <- Pres %>% left_join(profInfo2 %>% 
+                             select(profile_ID, profile_mean_mass, profile_mean_RT_min, homologue, neutral_mass, adduct), 
+                           by = c("profID" = "profile_ID")) %>% left_join(topHit, by = c("profID" = "prof")) %>% left_join(linksDF)
+
+Pres <- Pres %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
+                        adduct, formula, howID = id, topCandidate = name, links,
+                        `Absent_SE_Freq`, `Absent_SecondaryRO_Freq`, `Intermediate_SE_Freq`, `Intermediate_SecondaryRO_Freq`,
+                        `Present_SE_Freq`, `Present_SecondaryRO_Freq`, `Absent_SE_Prop`, `Absent_SecondaryRO_Prop`,
+                        `Intermediate_SE_Prop`, `Intermediate_SecondaryRO_Prop`, `Present_SE_Prop`, `Present_SecondaryRO_Prop`, 
+                        MeanDifference = diff, pValue, qValue)
+
+# Volcano Plot:
+# png(filename = paste0("./Plots/SE_SecondaryRO_Present_Volcano_",gsub("-", "", Sys.Date()), ".png"),
+#     height = 7, width = 8, units = "in", res = 600)
+Pres2 <- Pres
+Pres2 <- Pres2 %>% group_by(MeanDifference, qValue) %>% mutate(lab = n())
+Pres2$lab[-log10(Pres2$qValue) < -log10(0.001) | abs(Pres2$MeanDifference) < 1.5] <- ""
+Pres2 <- Pres2 %>% select(MeanDifference, qValue, lab) %>% unique()
+set.seed(33)
+ggplot(Pres2, aes(x = MeanDifference, y = -log10(qValue), label = lab)) + 
+  geom_point(pch = 21, color = "grey30", fill = "dodgerblue", alpha = .5) + 
+  geom_hline(yintercept =-log10(.001), lty = 2) + geom_vline(xintercept = -1.5, lty = 2) + 
+  geom_vline(xintercept = 1.5, lty = 2) + 
+  geom_text_repel(size = 3, segment.colour = "grey30", segment.alpha = .35, segment.size = .5) +
+  theme_bw() + labs(x = "Mean Difference", y = "-Log10(q-value)")
+# dev.off()
+
+# png(filename = "./Plots/SE_SecondaryRO_16427.png", height = 5, width = 6, units = "in", res = 600)
+set.seed(3)
+ggplot(profs3 %>% filter(profID == 16427), aes(x = whichSP, color = whichSP, y = intensity, label = fileName)) + 
+  geom_point() + geom_text_repel(size = 1.25, segment.size = .25, segment.alpha = .25) + theme_bw() + 
+  labs(title = "Profile #16427: SE and Secondary RO", subtitle = "m/z: 254.2478; RT: 10.69 min",
+       x = "Sampling Point", y = "Intensity", color = "Sampling\nPoint")
+# dev.off()
+
+# Export:
+writexl::write_xlsx(Pres, path = paste0("Results/SE_SecondaryRO_Pres_", gsub("-", "", Sys.Date()), ".xlsx"))
+
+# Save and cleanup:
+Pres_SE_SecondaryRO <- Pres
+rm(Pres, Pres2, test1, temp1, temp2, temp3, profs3)
+save.image("RData/working_20200702e.RData")
+
+########### Algal Effluent to RO ###########
+load("RData/working_20200702e.RData")
+
+# First get data for the profiles for Secondary Effluent and product water:
+profs3 <- profs2 %>% filter((grepl("AE-", fileName) & !grepl("Pool", fileName)) | 
+                              (grepl("RO_", fileName) & !grepl("Secondary", fileName)))
+
+# Toss out bad RO samples:
+profs3 <- profs3 %>% filter(!fileName %in% paste0("RO_", 9:14))
+profs3$fileName <- factor(profs3$fileName)
+table(profs3$fileName)
+
+profs3$cycle <- as.integer(str_split(profs3$fileName, "_", simplify = TRUE)[,2])
+profs3$logIntensity <- log10(profs3$intensity)
+profs3$whichSP <- ifelse(grepl("RO", profs3$fileName), "RO", "AE")
+profs3$whichSP <- factor(profs3$whichSP)
+
+# Add indicator for absent, intermediate, present:
+profs3 <- profs3 %>% mutate(pres = case_when(intensity == 0 ~ "Absent", intensity > 5*10^6 ~ "Present", 
+                                             TRUE ~ "Intermediate"))
+profs3$pres <- factor(profs3$pres, levels = c("Absent", "Intermediate", "Present"), ordered = TRUE)
+
+# Remove those absent in all:
+# Starting count:
+profs3 %>% select(profID) %>% unique() %>% nrow() # 53,672
+profs3 <- profs3 %>% group_by(profID) %>% mutate(countPresent = sum(pres == "Present"), 
+                                                 removeThis = countPresent == 0) %>% filter(!removeThis) %>% select(-countPresent, -removeThis)
+profs3 %>% select(profID) %>% unique() %>% nrow() # 14,125
+
+Pres <- data.frame(profID = unique(profs3$profID), diff = NA, pValue = NA)
+Pres2 <- list()
+for(i in 1:nrow(Pres)){
+  # Find all intensity for an individual feature:
+  temp1 <- profs3 %>% filter(profID == Pres$profID[i])
+  
+  # Tabulate present vs. absent:
+  temp2 <- as.data.frame(xtabs(~pres + whichSP, data = temp1)) 
+  temp2$pres <- paste0(temp2$pres, "_", temp2$whichSP)
+  temp2 <- temp2 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
+  names(temp2) <- paste0(names(temp2), "_Freq")
+  
+  # Tabulate proportions:
+  temp3 <- as.data.frame(prop.table(xtabs(~pres + whichSP, data = temp1), margin = 2))
+  temp3$pres <- paste0(temp3$pres, "_", temp3$whichSP)
+  temp3 <- temp3 %>% select(-whichSP) %>% spread(key = pres, value = Freq)
+  names(temp3) <- paste0(names(temp3), "_Prop")
+  
+  # Independence test:
+  if(length(table(as.integer(temp1$pres))) > 1){
+    test1 <- coin::independence_test(pres ~ whichSP, data = temp1)
+    Pres$pValue[i] <- pnorm(abs(test1@statistic@teststatistic), lower.tail = FALSE) * 2
+    temp1$pres2 <- as.integer(temp1$pres)
+    wc2 <- temp1 %>% group_by(whichSP) %>% summarize(mean = mean(pres2))
+    Pres$diff[i] <- wc2$mean[2] - wc2$mean[1]
+  }else{
+    Pres$diff[i] <- 0
+    Pres$pValue[i] <- 1
+  }
+  
+  # Eports:
+  Pres2[[i]] <- cbind(profID = Pres$profID[i], temp2, temp3)
+  print(i)
+}
+Pres2 <- do.call("rbind", Pres2)
+Pres <- Pres %>% left_join(Pres2)
+
+# Adjusted p-values:
+Pres$qValue <- p.adjust(Pres$pValue, method = "fdr")
+
+# Join with annotation data:
+Pres <- Pres %>% left_join(profInfo2 %>% 
+                             select(profile_ID, profile_mean_mass, profile_mean_RT_min, homologue, neutral_mass, adduct), 
+                           by = c("profID" = "profile_ID")) %>% left_join(topHit, by = c("profID" = "prof")) %>% left_join(linksDF)
+
+Pres <- Pres %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
+                        adduct, formula, howID = id, topCandidate = name, links,
+                        `Absent_AE_Freq`, `Absent_RO_Freq`, `Intermediate_AE_Freq`, `Intermediate_RO_Freq`,
+                        `Present_AE_Freq`, `Present_RO_Freq`, `Absent_AE_Prop`, `Absent_RO_Prop`,
+                        `Intermediate_AE_Prop`, `Intermediate_RO_Prop`, `Present_AE_Prop`, `Present_RO_Prop`, 
+                        MeanDifference = diff, pValue, qValue)
+
+# Volcano Plot:
+# png(filename = paste0("./Plots/AE_RO_Present_Volcano_",gsub("-", "", Sys.Date()), ".png"),
+#     height = 7, width = 8, units = "in", res = 600)
+Pres2 <- Pres
+Pres2 <- Pres2 %>% group_by(MeanDifference, qValue) %>% mutate(lab = n())
+Pres2$lab[-log10(Pres2$qValue) < -log10(0.001) | abs(Pres2$MeanDifference) < 1.5] <- ""
+Pres2 <- Pres2 %>% select(MeanDifference, qValue, lab) %>% unique()
+set.seed(33)
+ggplot(Pres2, aes(x = MeanDifference, y = -log10(qValue), label = lab)) + 
+  geom_point(pch = 21, color = "grey30", fill = "dodgerblue", alpha = .5) + 
+  geom_hline(yintercept =-log10(.001), lty = 2) + geom_vline(xintercept = -1.5, lty = 2) + 
+  geom_vline(xintercept = 1.5, lty = 2) + 
+  geom_text_repel(size = 3, segment.colour = "grey30", segment.alpha = .35, segment.size = .5) +
+  theme_bw() + labs(x = "Mean Difference", y = "-Log10(q-value)")
+# dev.off()
+
+# png(filename = "./Plots/AE_RO_1992.png", height = 5, width = 6, units = "in", res = 600)
+set.seed(3)
+ggplot(profs3 %>% filter(profID == 1992), aes(x = whichSP, color = whichSP, y = intensity, label = fileName)) + 
+  geom_point() + geom_text_repel(size = 1.25, segment.size = .25, segment.alpha = .25) + theme_bw() + 
+  labs(title = "Profile #1992: AE and RO", subtitle = "m/z: 136.0732; RT: 5.66 min",
+       x = "Sampling Point", y = "Intensity", color = "Sampling\nPoint")
+# dev.off()
+
+# Export:
+writexl::write_xlsx(Pres, path = paste0("Results/AE_RO_Pres_", gsub("-", "", Sys.Date()), ".xlsx"))
+
+# Save and cleanup:
+Pres_AE_RO <- Pres
+rm(Pres, Pres2, test1, temp1, temp2, temp3, profs3)
+save.image("RData/working_20200702f.RData")
+
+########### RO Time Course ###########

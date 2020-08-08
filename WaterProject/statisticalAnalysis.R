@@ -601,25 +601,26 @@ Pres <- Pres %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min
         `Intermediate_SE_Prop`, `Intermediate_RO_Prop`, `Present_SE_Prop`, `Present_RO_Prop`, 
         MeanDifference = diff, pValue, qValue)
 
-# png(filename = paste0("./Plots/SE_RPresent_Volcano_",gsub("-", "", Sys.Date()), ".png"),
-#     height = 7, width = 8, units = "in", res = 600)
+png(filename = paste0("./Plots/SE_RO_Present_Volcano_",gsub("-", "", Sys.Date()), ".png"),
+    height = 7, width = 8, units = "in", res = 600)
 Pres2 <- Pres
-Pres2$lab <- Pres2$profID
-Pres2$lab[-log10(Pres2$qValue) < -log10(.1) | abs(Pres2$MeanDifference) < 1.25] <- ""
+Pres2 <- Pres2 %>% group_by(MeanDifference, qValue) %>% mutate(lab = n())
+Pres2$lab[-log10(Pres2$qValue) < -log10(0.001) | abs(Pres2$MeanDifference) < 1.5] <- ""
+Pres2 <- Pres2 %>% select(MeanDifference, qValue, lab) %>% unique()
 set.seed(33)
 ggplot(Pres2, aes(x = MeanDifference, y = -log10(qValue), label = lab)) + 
-  geom_point(pch = 21,color = "grey30", fill = "dodgerblue", alpha = .5) + 
-  geom_hline(yintercept =-log10(.1), lty = 2) + geom_vline(xintercept = -1.25, lty = 2) + 
-  geom_vline(xintercept = 1.25, lty = 2) + 
-  geom_text_repel(size = 1.5, segment.colour = "grey30", segment.alpha = .35, segment.size = .5) +
+  geom_point(pch = 21, color = "grey30", fill = "dodgerblue", alpha = .5) + 
+  geom_hline(yintercept =-log10(.001), lty = 2) + geom_vline(xintercept = -1.5, lty = 2) + 
+  geom_vline(xintercept = 1.5, lty = 2) + 
+  geom_text_repel(size = 3, segment.colour = "grey30", segment.alpha = .35, segment.size = .5) +
   theme_bw() + labs(x = "Mean Difference", y = "-Log10(q-value)")
-# dev.off()
+dev.off()
 
 # Export:
 writexl::write_xlsx(Pres, path = paste0("Results/SE_Product_Pres_", gsub("-", "", Sys.Date()), ".xlsx"))
 
 # Save and cleanup:
 Pres_SE_Product <- Pres
-rm(Pres, Pres2, wc1, wc2, temp1, temp2, temp3, profs3)
+rm(Pres, Pres2, test1, temp1, temp2, temp3, profs3)
 save.image("RData/working_20200702d.RData")
 

@@ -10,7 +10,20 @@ peaks <- profileList_pos$peaks
 profInfo <- profileList_pos$index_prof
 
 # peaks3753 <- peaks[peaks[,"profileIDs"] == 3753, ]
+
+# Profile links:
 load("./EnviMassProcessing_MS1_v2/results/links_profiles_pos")
+getLinks <- function(x){
+  return(paste(x$group$direct, collapse = ";"))
+}
+
+linksList <- list()
+for(i in 1:length(links_profiles_pos)){
+  if(!is.na(links_profiles_pos[[i]])){
+    linksList[[i]] <- data.frame(profID = names(links_profiles_pos)[i], links = getLinks(links_profiles_pos[[i]]))
+  }
+}
+linksDF <- do.call("rbind", linksList)
 
 # Internal standards:
 load("./EnviMassProcessing_MS1_v2/results/screening/res_IS_pos_screen")
@@ -45,4 +58,4 @@ for(i in 1:length(res_IS_pos_screen)){
 }
 iSTDDF <- do.call("rbind", iSTDLists)
 
-save(peaks, profs, profInfo, iSTDDF, file = "RData/enviMassOutput_20200714.RData")
+save(peaks, profs, profInfo, iSTDDF, linksDF, file = "RData/enviMassOutput_20200714.RData")

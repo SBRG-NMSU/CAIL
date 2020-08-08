@@ -856,3 +856,88 @@ rm(Pres, Pres2, test1, temp1, temp2, temp3, profs3)
 save.image("RData/working_20200702f.RData")
 
 ########### RO Time Course ###########
+load("RData/working_20200702f.RData")
+
+# First get data for the profiles for RO:
+profs3 <- profs2 %>% filter(grepl("RO_", fileName) & !grepl("Secondary", fileName))
+profs3 <- profs3 %>% filter(!fileName %in% paste0("RO_", 9:14))
+profs3$fileName <- factor(profs3$fileName)
+table(profs3$fileName)
+
+profs3$cycle <- as.integer(str_split(profs3$fileName, "_", simplify = TRUE)[,2])
+profs3$logIntensity <- log10(profs3$intensity)
+
+# Processing for time-course:
+# 1. Remove profiles not observed in >40% of samples
+# 2. Remove profiles with average peak area less than 5×10^6 in samples
+
+# Filter out super missing:
+profs3 %>% select(profID) %>% unique() %>% nrow() # 53,672 profiles
+profs3 <- profs3 %>% group_by(profID) %>% mutate(countNonZero = sum(intensity > 0), countTotal = n(),
+                                                 removeIt = ifelse(countNonZero / countTotal <= .6, TRUE, FALSE)) %>%
+  ungroup() %>% filter(!removeIt) %>% select(-(countNonZero:removeIt))
+profs3 %>% select(profID) %>% unique() %>% nrow() # 2,783 profiles
+
+# Filter out too low abundance: 
+profs3 <- profs3 %>% group_by(profID) %>% mutate(meanIntByGroup = mean(intensity), 
+                                                          lowAbundanceByGroup = meanIntByGroup < 5*10^6, groupN = n()) %>% ungroup() %>% group_by(profID) %>% 
+  mutate(countLowAbundanceByGroup = sum(lowAbundanceByGroup), tooLow = countLowAbundanceByGroup == groupN) %>%
+  group_by(profID) %>% mutate(removeThis = sum(tooLow) > 0) %>% ungroup() %>% filter(!removeThis) %>%
+  select(-meanIntByGroup, -lowAbundanceByGroup, -groupN, -countLowAbundanceByGroup, -tooLow, -removeThis)
+profs3 %>% select(profID) %>% unique() %>% nrow() # 2,091 profiles
+
+# Imputation
+profs3 <- profs3 %>% group_by(profID) %>% mutate(mNZ = minNonZero(intensity))
+profs3$intensity <- ifelse(profs3$intensity > 0, profs3$intensity, profs3$mNZ)
+profs3$logIntensity <- log10(profs3$intensity)
+
+# Super LM:
+TC <- data.frame(profID = unique(profs3$profID), lrtOverall = NA, slope = NA, slopeP = NA)
+for(i in 1:nrow(TC)){
+  temp1 <- profs3 %>% filter(profID == TC$profID[i])
+  lm0 <- lm(logIntensity ~ 1, data = temp1)
+  lm1 <- lm(logIntensity ~ cycle, data = temp1)
+  TC$lrtOverall[i] <- anova(lm1, lm0)$`Pr(>F)`[2]
+  # Coefficients for beta:
+  temp2 <- as.data.frame(coef(summary(lm1)))
+  
+  TC$slope[i] <- temp2["cycle","Estimate"]
+  TC$slopeP[i] <- temp2["cycle","Pr(>|t|)"]
+  print(i)
+}
+
+# Adjusted p-values:
+TC$slopeQ <- p.adjust(TC$slopeP, method = "fdr")
+
+# Add profile m/z and RT:
+TC <- TC %>% left_join(profInfo2 %>% 
+        select(profile_ID, profile_mean_mass, profile_mean_RT_min, homologue, neutral_mass, adduct), 
+        by = c("profID" = "profile_ID")) %>% left_join(topHit, by = c("profID" = "prof")) %>% left_join(linksDF)
+
+# Volcano plots:
+png(filename = paste0("./Plots/RO_TC_Volcano_",gsub("-", "", Sys.Date()), ".png"),
+    height = 7, width = 8, units = "in", res = 600)
+TC2 <- TC
+TC2$lab <- TC2$profID
+TC2$lab[-log10(TC2$slopeQ) < 2 | abs(TC2$slope) < .075] <- ""
+set.seed(3)
+ggplot(TC2, aes(x = slope, y = -log10(slopeQ), label = lab)) + 
+  geom_point(pch = 21,color = "grey30", fill = "dodgerblue", alpha = .5) + 
+  geom_hline(yintercept = 2, lty = 2) + geom_vline(xintercept = -.075, lty = 2) + 
+  geom_vline(xintercept = .075, lty = 2) + 
+  geom_text_repel(size = 2, segment.colour = "grey30", segment.alpha = .5, segment.size = .5) +
+  theme_bw() + labs(x = "RO Time-Course Slope", y = "-Log10(q-value)")
+dev.off()
+
+# png(filename = "./Plots/RO_TC_42274.png", height = 4, width = 5, units = "in", res = 600)
+ggplot(profs3 %>% filter(profID == 42274), aes(x = cycle, y = log10(intensity))) + geom_point() + 
+  stat_smooth(method = "lm") + theme_bw() + 
+  labs(title = "Profile #42274", subtitle = "m/z: 421.0366; RT: 7.47 min",
+       x = "Cycle", y = "Log10(Intensity)")
+# dev.off()
+
+# Export time-course data:
+TC <- TC %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
+                          adduct, formula, howID = id, topCandidate = name, links,
+                          slope, slopeP, slopeQ)
+writexl::write_xlsx(TC, path = paste0("Results/RO_Timecourse_", gsub("-", "", Sys.Date()), ".xlsx"))

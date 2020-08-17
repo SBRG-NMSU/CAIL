@@ -408,7 +408,8 @@ ggplot(profs3 %>% filter(profID == 16791), aes(x = cycle, color = whichSP, y = l
 
 # Export time-course data:
 AE_TC <- AE_TC %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
-                          adduct, formula, howID = id, topCandidate = name, links,
+                          adduct, formula, howID = id, topCandidate = name, 
+                          InChI, InChIKey, SMILES, links,
                           slope1, slope34, AE34minusAE1 = AE34minAE1, slope1p, slope34p, AE34minusAE1p = AE34minAE1p,
                           slope1q, slope34q, AE34minusAE1q = AE34minAE1q)
 writexl::write_xlsx(AE_TC, path = paste0("Results/AE_Timecourse_", gsub("-", "", Sys.Date()), ".xlsx"))
@@ -486,7 +487,8 @@ Pres <- Pres %>% left_join(profInfo2 %>%
    select(profile_ID, profile_mean_mass, profile_mean_RT_min, homologue, neutral_mass, adduct), 
    by = c("profID" = "profile_ID")) %>% left_join(topHit, by = c("profID" = "prof")) %>% left_join(linksDF)
 Pres <- Pres %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
-                 adduct, formula, howID = id, topCandidate = name, links,
+                 adduct, formula, howID = id, topCandidate = name, 
+                 InChI, InChIKey, SMILES, links,
                 `Absent_AE-1_Freq`, `Absent_AE-3/4_Freq`, `Intermediate_AE-1_Freq`, `Intermediate_AE-3/4_Freq`,
                 `Present_AE-1_Freq`, `Present_AE-3/4_Freq`, `Absent_AE-1_Prop`, `Absent_AE-3/4_Prop`,
                 `Intermediate_AE-1_Prop`, `Intermediate_AE-3/4_Prop`, `Present_AE-1_Prop`, `Present_AE-3/4_Prop`, 
@@ -595,7 +597,8 @@ Pres <- Pres %>% left_join(profInfo2 %>%
      select(profile_ID, profile_mean_mass, profile_mean_RT_min, homologue, neutral_mass, adduct), 
      by = c("profID" = "profile_ID")) %>% left_join(topHit, by = c("profID" = "prof")) %>% left_join(linksDF)
 Pres <- Pres %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
-        adduct, formula, howID = id, topCandidate = name, links,
+        adduct, formula, howID = id, topCandidate = name, 
+        InChI, InChIKey, SMILES, links,
         `Absent_SE_Freq`, `Absent_RO_Freq`, `Intermediate_SE_Freq`, `Intermediate_RO_Freq`,
         `Present_SE_Freq`, `Present_RO_Freq`, `Absent_SE_Prop`, `Absent_RO_Prop`,
         `Intermediate_SE_Prop`, `Intermediate_RO_Prop`, `Present_SE_Prop`, `Present_RO_Prop`, 
@@ -704,7 +707,8 @@ Pres <- Pres %>% left_join(profInfo2 %>%
                            by = c("profID" = "profile_ID")) %>% left_join(topHit, by = c("profID" = "prof")) %>% left_join(linksDF)
 
 Pres <- Pres %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
-                        adduct, formula, howID = id, topCandidate = name, links,
+                        adduct, formula, howID = id, topCandidate = name,
+                        InChI, InChIKey, SMILES, links,
                         `Absent_SE_Freq`, `Absent_SecondaryRO_Freq`, `Intermediate_SE_Freq`, `Intermediate_SecondaryRO_Freq`,
                         `Present_SE_Freq`, `Present_SecondaryRO_Freq`, `Absent_SE_Prop`, `Absent_SecondaryRO_Prop`,
                         `Intermediate_SE_Prop`, `Intermediate_SecondaryRO_Prop`, `Present_SE_Prop`, `Present_SecondaryRO_Prop`, 
@@ -817,7 +821,8 @@ Pres <- Pres %>% left_join(profInfo2 %>%
                            by = c("profID" = "profile_ID")) %>% left_join(topHit, by = c("profID" = "prof")) %>% left_join(linksDF)
 
 Pres <- Pres %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
-                        adduct, formula, howID = id, topCandidate = name, links,
+                        adduct, formula, howID = id, topCandidate = name,
+                        InChI, InChIKey, SMILES, links,
                         `Absent_AE_Freq`, `Absent_RO_Freq`, `Intermediate_AE_Freq`, `Intermediate_RO_Freq`,
                         `Present_AE_Freq`, `Present_RO_Freq`, `Absent_AE_Prop`, `Absent_RO_Prop`,
                         `Intermediate_AE_Prop`, `Intermediate_RO_Prop`, `Present_AE_Prop`, `Present_RO_Prop`, 
@@ -915,8 +920,8 @@ TC <- TC %>% left_join(profInfo2 %>%
         by = c("profID" = "profile_ID")) %>% left_join(topHit, by = c("profID" = "prof")) %>% left_join(linksDF)
 
 # Volcano plots:
-png(filename = paste0("./Plots/RO_TC_Volcano_",gsub("-", "", Sys.Date()), ".png"),
-    height = 7, width = 8, units = "in", res = 600)
+# png(filename = paste0("./Plots/RO_TC_Volcano_",gsub("-", "", Sys.Date()), ".png"),
+#     height = 7, width = 8, units = "in", res = 600)
 TC2 <- TC
 TC2$lab <- TC2$profID
 TC2$lab[-log10(TC2$slopeQ) < 2 | abs(TC2$slope) < .075] <- ""
@@ -927,7 +932,7 @@ ggplot(TC2, aes(x = slope, y = -log10(slopeQ), label = lab)) +
   geom_vline(xintercept = .075, lty = 2) + 
   geom_text_repel(size = 2, segment.colour = "grey30", segment.alpha = .5, segment.size = .5) +
   theme_bw() + labs(x = "RO Time-Course Slope", y = "-Log10(q-value)")
-dev.off()
+# dev.off()
 
 # png(filename = "./Plots/RO_TC_42274.png", height = 4, width = 5, units = "in", res = 600)
 ggplot(profs3 %>% filter(profID == 42274), aes(x = cycle, y = log10(intensity))) + geom_point() + 
@@ -938,6 +943,7 @@ ggplot(profs3 %>% filter(profID == 42274), aes(x = cycle, y = log10(intensity)))
 
 # Export time-course data:
 TC <- TC %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
-                          adduct, formula, howID = id, topCandidate = name, links,
+                          adduct, formula, howID = id, topCandidate = name, 
+                          InChI, InChIKey, SMILES, links,
                           slope, slopeP, slopeQ)
 writexl::write_xlsx(TC, path = paste0("Results/RO_Timecourse_", gsub("-", "", Sys.Date()), ".xlsx"))

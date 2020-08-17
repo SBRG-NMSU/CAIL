@@ -263,7 +263,8 @@ for(i in 1:length(fNames1)){
       res2 <- res1[res1$mzRelErr == min(res1$mzRelErr),]
       res3 <- data.frame(prof = profRes1, formula = paste(unique(res2$MolecularFormula), collapse = "|"), 
                          id = "MS1_Only",
-                         name = paste(paste(res2$CASRN_DTXSID, res2$MolecularFormula, res2$Name, sep = ":"), collapse = "|"))
+                         name = paste(paste(res2$CASRN_DTXSID, res2$MolecularFormula, res2$Name, sep = ":"), collapse = "|"),
+                         InChI = "", InChIKey = "", SMILES = "")
       # Save top hit:
       res4[[i]] <- res3
       
@@ -274,7 +275,9 @@ for(i in 1:length(fNames1)){
       # Save top result:
       res2 <- res1[1,]
       res3 <- data.frame(prof = profRes1, formula = res2$MolecularFormula, id = "MS1 + MS2",
-                         name = paste(res2$CASRN_DTXSID, res2$Name, sep = ":"))
+                         name = paste(res2$CASRN_DTXSID, res2$Name, sep = ":"),
+                         InChI = res2$InChI, InChIKey = paste0(res2$InChIKey1, "-", res2$InChIKey2, "-", res2$InChIKey3),
+                         SMILES = res2$SMILES)
       # Save top hit:
       res4[[i]] <- res3
       
@@ -310,8 +313,10 @@ for(i in 1:length(fNames1)){
           height = 5, width = 7, units = "in", res = 300)
       p1 <- ggplot(msmsRes1, aes(x = `m/z`, xend = `m/z`, y = 0, yend = Intensity, color = Matched)) + 
         geom_segment(lwd = 1.2) + theme_bw() + scale_color_brewer(palette = "Set1") +
-        labs(y = "Intensity", title = paste("Profile:", tempInfo$profile_ID), 
-             subtitle = paste("Precursor m/z:", round(tempInfo$profile_mean_mass,4), "RT:", tempInfo$profile_mean_RT_min))
+        labs(y = "Intensity", title = paste0("Profile: ", tempInfo$profile_ID, ". precursor m/z: ", 
+            round(tempInfo$profile_mean_mass,4), ", RT: ", tempInfo$profile_mean_RT_min, " min"),
+            subtitle = paste0("Candidate. ", res2$MolecularFormula, ", CAS: ", res2$CASRN_DTXSID,
+                              ", Name: ", res2$Name))
       show(p1)
       dev.off()
       
@@ -321,8 +326,10 @@ for(i in 1:length(fNames1)){
         geom_segment(lwd = 1.2, color = "#377EB8") + 
         geom_segment(aes(x = `m/z`, xend = `m/z`, y = 0, yend = -value), color = "#E41A1C", lwd = 1.2) + 
         geom_hline(yintercept = 0, lwd = .1) + theme_bw() + 
-        labs(y = "Intensity (-Fragment Score)", title = paste("Profile:", tempInfo$profile_ID), 
-             subtitle = paste("Precursor m/z:", round(tempInfo$profile_mean_mass,4), "RT:", tempInfo$profile_mean_RT_min)) 
+        labs(y = "Intensity (-Fragment Score)", title = paste0("Profile: ", tempInfo$profile_ID, ". precursor m/z: ", 
+             round(tempInfo$profile_mean_mass,4), ", RT: ", tempInfo$profile_mean_RT_min, " min"),
+             subtitle = paste0("Candidate. ", res2$MolecularFormula, ", CAS: ", res2$CASRN_DTXSID,
+                               ", Name: ", res2$Name)) 
       show(p2)
       dev.off()
     }

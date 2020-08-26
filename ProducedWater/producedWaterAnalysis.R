@@ -365,3 +365,13 @@ topHit <- res4
 allHits <- res5
 
 save(topHit, allHits, file = "metFragCand_20200818.RData")
+
+############ Join with profile data ############
+profsL <- as.data.frame(t(profs))
+profsL$prof <- as.integer(rownames(profsL))
+res4$prof <- as.integer(res4$prof)
+profsL <- profInfo2 %>% select(prof = profile_ID, rt = profile_mean_RT_s, rtMin = profile_mean_RT_min, mz = profile_mean_mass,
+                               neutral_mass, adduct = metFragAdduct, ISTD, homologue) %>% full_join(res4) %>% full_join(profsL)
+profsL <- profsL %>% filter(ISTD == "-")
+profsL <- profsL %>% select(-ISTD)
+writexl::write_xlsx(profsL, path = "ProducedWater_20200821.xlsx")

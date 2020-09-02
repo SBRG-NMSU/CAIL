@@ -2,7 +2,7 @@
 options(stringsAsFactors = FALSE, scipen = 600, max.print = 100000)
 oldPar <- par()
 library(tidyverse)
-# library(xcms)
+library(xcms)
 
 os <- Sys.info()
 baseDir <- ifelse(os["sysname"] == "Windows", ifelse(os["nodename"] == "CAHF-RSCH-SK147","C:/Users/ptrainor/Documents/GitHub/cail/",
@@ -38,9 +38,9 @@ profInfo$profile_ID <- as.character(as.integer(profInfo$profile_ID))
 # Import DDA data:
 files1 <- list.files("C:/Users/ptrainor/Dropbox (NMSU Advanced)/Patrick/Himali/mzXML",
                      full.names = TRUE, pattern = "MS2")
-df1 <- MSnbase::readMSData(files1, mode = "onDisk")
-df2 <-  MSnbase::filterMsLevel(df1, 2)
-df1Header <- MSnbase::header(df1)
+df1 <- readMSData(files1, mode = "onDisk")
+df2 <-  filterMsLevel(df1, 2)
+df1Header <- header(df1)
 df1Header$sName <- rownames(df1Header)
 
 ########### Process MS/MS data ###########
@@ -58,13 +58,46 @@ df2Anno$mzLower <- df2Anno$precursorMz - df2Anno$precursorMz * mzTol * 1e-6
 df2Anno$mzUpper <- df2Anno$precursorMz + df2Anno$precursorMz * mzTol * 1e-6
 
 # Join here:
+combFun <- function(x) consensusSpectrum(x, mzd = .1, minProp = .5, mzFun = mean, intensityFun = mean)
 profInfo2$msmsMatch <- profInfo2$msmsMatchU <- ""
+combSpectraList <- list()
 for(i in 1:nrow(profInfo2)){
   match1 <- profInfo2$profile_mean_mass[i] > df2Anno$mzLower & profInfo2$profile_mean_mass[i] < df2Anno$mzUpper
   match2 <- profInfo2$profile_mean_RT_s[i] > df2Anno$rtLower & profInfo2$profile_mean_RT_s[i] < df2Anno$rtUpper
   match3 <- df2Anno$sName[which(match1 & match2)]
   
-  msmsMatch3 <- df2[rownames(df2@featureData) %in% match3]
-  MSnbase::combineSpectra(msmsMatch3, method = consensusSpectrum())
-  profInfo2$msmsMatch[i] <- paste(match3, collapse = ";")
+  if(length(match3) > 0){
+    msms <- df2[rownames(df2@featureData) %in% match3]
+    l1 <- list()
+    for(j in 1:length(msms)){
+      l1[[j]] <- msms[[j]]
+      l1[[j]]<- clean(removePeaks(l1[[j]], 75), all = TRUE)
+      l1[[j]]@intensity <- l1[[j]]@intensity / max(l1[[j]]@intensity) * 100
+      l1[[j]] <- clean(removePeaks(l1[[j]], 2), all = TRUE)
+      if(l1[[j]]@peaksCount == 0) l1[[j]] <- NULL
+    }
+    if(sum(sapply(l1, function(x) !is.null(x))) > 0){
+      l1 <- rlist::list.clean(l1)
+      mSpec1 <- MSpectra(l1)
+      combMSMS <- combineSpectra(MSpectra(l1), method = combFun)
+      combSpectraList[[profInfo$profile_ID[[i]]]] <- combMSMS
+      profInfo2$msmsMatch[i] <- paste(match3, collapse = ";")
+    }
+  }
+  print(i)
 }
+
+############ Some processing of iSTD data ############
+# Split ID from the enviMass output:
+iSTDDF$iSTD_ID <- gsub("_none_none_none", "", iSTDDF$iSTD_ID)
+temp1 <- str_split(iSTDDF$iSTD_ID, "_", simplify = TRUE)
+iSTDDF$iSTD_ID <- temp1[,1]
+iSTDDF$adduct <- temp1[,2]
+
+# Join our db file:
+iSTDs$ID <- as.character(iSTDs$ID)
+iSTDDF <- iSTDDF %>% left_join(iSTDs, by = c("iSTD_ID" = "ID"))
+iSTDDF$iso <- ifelse(abs(iSTDDF$`m/z` - iSTDDF$Da) < .050, "0", "")
+mISTD <- iSTDDF %>% filter(adduct == "M+H" & iso == "0")
+presentISTD <- mISTD %>% group_by(file_ID, Name) %>% summarize(n = n()) %>% spread(key = "Name", value = "n")
+presentISTD <- sampleAnno %>% select(ID, Label) %>% right_join(presentISTD, by = c("ID" = "file_ID"))

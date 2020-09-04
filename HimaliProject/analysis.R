@@ -80,12 +80,88 @@ for(i in 1:nrow(profInfo2)){
       l1 <- rlist::list.clean(l1)
       mSpec1 <- MSpectra(l1)
       combMSMS <- combineSpectra(MSpectra(l1), method = combFun)
-      combSpectraList[[profInfo$profile_ID[[i]]]] <- combMSMS
+      combSpectraList[[profInfo2$profile_ID[i]]] <- combMSMS
       profInfo2$msmsMatch[i] <- paste(match3, collapse = ";")
     }
   }
   print(i)
 }
+
+# Add adduct information:
+profInfo2$adduct <- gsub("\\*|\\*\\*", "", 
+                         str_split(profInfo2$neutral_mass_info, " / ", simplify = TRUE)[,1])
+
+# Aduct match table:
+adductMatch <- data.frame(enviMassForm = c("M+H", "M+NH4", "M+Na", "M+K"), 
+                          metFragAdduct = c("[M+H]+", "[M+NH4]+", "[M+Na]+", "[M+K]+"))
+profInfo2 <- profInfo2 %>% left_join(adductMatch, by = c("adduct"="enviMassForm"))
+
+save.image(file = "working_20200904.RData")
+
+############ Modified Run MetFrag code ############
+load("working_20200904.RData")
+runMetFragMy <-function (config_file, MetFrag_dir, CL_name, config_dir = dirname(config_file)) {
+  config_exists <- file.exists(config_file) && file.exists(config_dir)
+  current_dir <- getwd()
+  if (config_exists) {
+    log_dir <- gsub("config", "log", config_dir)
+    if (!file.exists(log_dir)) {
+      dir.create(log_dir)
+    }
+  }
+  else {
+    warning(paste("Configuration file ", config_file, 
+                  " or directory not found, please try a new file"))
+    stop()
+  }
+  MetFragCommand <- paste('java -jar "', gsub("/", "\\", paste0(MetFrag_dir, CL_name), fixed = TRUE), 
+                          '" ', config_file, sep = "")
+  MetFrag_out <- system(command = MetFragCommand, intern = TRUE, 
+                        show.output.on.console = TRUE)
+  log_file <- gsub("config", "log", config_file)
+  write(MetFrag_out, log_file)
+  setwd(current_dir)
+}
+
+# Load EPA Comp-Tox file:
+csvFile <- "C:/Users/ptrainor/Documents/GitHub/cail/ProducedWater/CompTox.csv"
+
+# Run MetFrag with CompTox
+profList <- profInfo2$profile_ID
+for(i in 1:length(profList)){
+  profID <- profList[i]
+  
+  # Which MSMS from list object:
+  if(!is.null(combSpectraList[[profID]])){
+    msms <- data.frame(mz = mz(combSpectraList[[profID]][[1]]), intensity = intensity(combSpectraList[[profID]][[1]]))
+  }else{
+    msms <- ""
+  }
+  
+  # Write temp .txt file with MS/MS data:
+  write.table(msms, file = paste0("msmsPeaks2/prof_", profID, ".txt"), 
+              col.names = FALSE, row.names = FALSE, sep = "\t")
+  
+  # Write configuration file for MetFrag:
+  profMZ <- profInfo2$profile_mean_mass[profInfo2$profile_ID == profID]
+  profAdduct <- profInfo2$metFragAdduct[profInfo2$profile_ID == profID]
+  ReSOLUTION::MetFragConfig(mass = profMZ, adduct_type = profAdduct, 
+                            DB = "LocalCSV", localDB_path = csvFile, num_threads = 8,
+                            results_filename = paste0("prof_", profID),
+                            peaklist_path = paste0( "msmsPeaks2/prof_", profID, ".txt"), 
+                            base_dir = paste0("metFragOut2"), ppm = 2,
+                            mzabs = 0.1, frag_ppm = 333, output = "CSV")
+  
+  # MetFrag call:
+  baseDir <- "C:/Users/ptrainor/Documents/GitHub/cail/HimaliProject"
+  runMetFragMy(config_file = paste0(baseDir, "/metFragOut2/config/prof_", profID, "_config.txt"), 
+               config_dir = paste0(baseDir, "/metFragOut2/config"), MetFrag_dir = "C:/Program Files/metfrag", 
+               CL_name = "/MetFrag2.4.5-CL.jar")
+  
+  print(i)
+}
+
+save.image(file = "working_20200904b.RData")
 
 ############ Some processing of iSTD data ############
 # Split ID from the enviMass output:
@@ -149,21 +225,27 @@ pheatmap::pheatmap(aSProfs, colsep = "", clustering_method = "ward.D2", color = 
 dev.off()
 
 png(filename = "Plots/heatmap_wEntropy.png", height = 5, width = 7, units = "in", res = 300)
-pheatmap::pheatmap(aSProfs[, colEntropies > 2], colsep = "", clustering_method = "ward.D2", color = col1)
+pheatmap::pheatmap(aSProfs[, colEntropies > 2], colsep = "", clustering_method = "ward.D2", color = col1,
+                   show_colnames = FALSE)
 dev.off()
 
 # PCA
 pca1 <- prcomp(aSProfs)
-pca1DF <- as.data.frame(pca1$x[, 1:2])
+pca1DF <- as.data.frame(pca1$x[, 1:4])
 pca1DF$sampleID <- rownames(pca1DF)
-pca1DF$sampleID <- gsub("90percent_", "", gsub("90per_", "", pca1DF$sampleID))
-pca1DF <- pca1DF %>% left_join(sampleAnno %>% select(Name, Group = tag3), by = c("sampleID" = "Name"))
 
-# png(filename = paste0("./Plots/PCA_prior2Norm_", gsub("-", "", Sys.Date()), ".png"),
-#     height = 5.5, width = 8, units = "in", res = 600)
+png(filename = paste0("./Plots/PCA_prior2Norm_", gsub("-", "", Sys.Date()), ".png"),
+    height = 5.5, width = 6, units = "in", res = 600)
 set.seed(3)
-ggplot(pca1DF, aes(x = PC1, y = PC2, label = sampleID, color = Group)) + geom_point() + 
-  geom_text_repel(size = 2.75) + theme_bw() + labs(title = "PCA prior to normalization") +
+ggplot(pca1DF, aes(x = PC1, y = PC2, label = sampleID)) + geom_point() + 
+  ggrepel::geom_text_repel(size = 2.75) + theme_bw() + labs(title = "PCA prior to normalization") +
   theme(plot.title = element_text(hjust = 0.5))
-# dev.off()
+dev.off()
 
+png(filename = paste0("./Plots/PCA_prior2Norm_23_", gsub("-", "", Sys.Date()), ".png"),
+    height = 5.5, width = 6, units = "in", res = 600)
+set.seed(3)
+ggplot(pca1DF, aes(x = PC2, y = PC3, label = sampleID)) + geom_point() + 
+  ggrepel::geom_text_repel(size = 2.75) + theme_bw() + labs(title = "PCA prior to normalization") +
+  theme(plot.title = element_text(hjust = 0.5))
+dev.off()

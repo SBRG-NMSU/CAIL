@@ -5,8 +5,8 @@ library(tidyverse)
 library(xcms)
 
 os <- Sys.info()
-baseDir <- ifelse(os["sysname"] == "Windows", ifelse(os["nodename"] == "CAHF-RSCH-SK147","C:/Users/ptrainor/Documents/GitHub/cail/",
-                                          "C:/Users/ptrainor/gdrive/CAIL/"), "~/gdrive/CAIL/")
+baseDir <- ifelse(os["sysname"] == "Windows", ifelse(os["nodename"] == "CAHF-RSCH-SK147",
+    "C:/Users/ptrainor/Documents/GitHub/cail/","C:/Users/ptrainor/gdrive/CAIL/"), "~/gdrive/CAIL/")
 setwd(paste0(baseDir, "HimaliProject/"))
 
 ########### Import and lite processing ###########
@@ -29,7 +29,7 @@ profInfo2$profile_ID <- as.character(profInfo2$profile_ID)
 profInfo2$adduct <- gsub("\\*", "", str_split(profInfo2$neutral_mass_info, " / ", simplify = TRUE)[,1])
 
 # Internal standards:
-iSTDs <- readxl::read_excel("iSTDs.xlsx")
+iSTDs <- readxl::read_excel("iSTDs2.xlsx")
 
 # Process profile annotation data:
 profInfo <- as.data.frame(profInfo)
@@ -101,3 +101,69 @@ iSTDDF$iso <- ifelse(abs(iSTDDF$`m/z` - iSTDDF$Da) < .050, "0", "")
 mISTD <- iSTDDF %>% filter(adduct == "M+H" & iso == "0")
 presentISTD <- mISTD %>% group_by(file_ID, Name) %>% summarize(n = n()) %>% spread(key = "Name", value = "n")
 presentISTD <- sampleAnno %>% select(ID, Label) %>% right_join(presentISTD, by = c("ID" = "file_ID"))
+
+############ Some processing of profile data ############
+# Set rownames on that data:
+rownames(profs) <- sampleAnno$Label[match(rownames(profs), sampleAnno$ID)]
+
+# Create data.frame with no blanks or "H20+IS samples":
+aSProfs <- profs
+
+# Which are 0:
+which(aSProfs == 0, arr.ind = TRUE)
+
+# Imputation Function
+minNonZero <- function(x) min(x[x > 0]) / 2
+impFun <- function(x){
+  if(sum(x == 0) > 0){
+    x[x == 0] <- minNonZero(x)
+  }
+  return(x)
+}
+# Imputation for missing values:
+aSProfs <- apply(aSProfs, 2, impFun)
+
+# Convert to log-scale:
+aSProfs <- log10(aSProfs)
+
+# Entropy filter:
+entropyFun <- function(x) entropy::entropy(entropy::discretize(x, numBins = 6), unit = "log2")
+colEntropies <- apply(aSProfs, 2, entropyFun)
+hist(colEntropies)
+colEntropies <- as.data.frame(colEntropies)
+
+# png(filename = "./Plots/EntropyFilter1.png", height = 3, width = 4, units = "in", res = 600)
+ggplot(colEntropies, aes(x = colEntropies)) + geom_histogram(bins = 35, color = "black", fill = "lightblue") + 
+  geom_vline(xintercept = 1, lty = 2, color = "darkred") + 
+  labs(title = "Shannon entropy of peak intensities", x = "Entropy (Log2)", y = "Frequency") +
+  theme_bw()
+# dev.off()
+
+############ Viz prior to normalization ############
+# Heatmap #LOH
+col1 <- colorRampPalette(RColorBrewer::brewer.pal(10, "RdYlBu"))(256)
+
+png(filename = "Plots/heatmap.png", height = 5, width = 7, units = "in", res = 300)
+pheatmap::pheatmap(aSProfs, colsep = "", clustering_method = "ward.D2", color = col1,
+                   show_colnames = FALSE)
+dev.off()
+
+png(filename = "Plots/heatmap_wEntropy.png", height = 5, width = 7, units = "in", res = 300)
+pheatmap::pheatmap(aSProfs[, colEntropies > 2], colsep = "", clustering_method = "ward.D2", color = col1)
+dev.off()
+
+# PCA
+pca1 <- prcomp(aSProfs)
+pca1DF <- as.data.frame(pca1$x[, 1:2])
+pca1DF$sampleID <- rownames(pca1DF)
+pca1DF$sampleID <- gsub("90percent_", "", gsub("90per_", "", pca1DF$sampleID))
+pca1DF <- pca1DF %>% left_join(sampleAnno %>% select(Name, Group = tag3), by = c("sampleID" = "Name"))
+
+# png(filename = paste0("./Plots/PCA_prior2Norm_", gsub("-", "", Sys.Date()), ".png"),
+#     height = 5.5, width = 8, units = "in", res = 600)
+set.seed(3)
+ggplot(pca1DF, aes(x = PC1, y = PC2, label = sampleID, color = Group)) + geom_point() + 
+  geom_text_repel(size = 2.75) + theme_bw() + labs(title = "PCA prior to normalization") +
+  theme(plot.title = element_text(hjust = 0.5))
+# dev.off()
+

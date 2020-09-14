@@ -62,6 +62,15 @@ pG3pepE <- evidence[evidence$`Peptide ID` %in% do.call("c", sapply(protGroups[pr
 # Protein groups vs proteins:
 length(unique(protGroups[str_split(protGroups$`Protein IDs`, ";", simplify = TRUE)[,2] == "",]$`Protein IDs`))
 
+# All protein DE:
+protGroups2b <- protGroups %>% select(id, `Intensity WT`, `Intensity HNOX`, `Protein IDs`,
+                                      `Fasta headers`)
+protVsnb <- vsn::justvsn(as.matrix(protGroups2b[, 2:3]))
+protGroups2b$intWT <- protVsnb[,"Intensity WT"]
+protGroups2b$intHNOX <- protVsnb[,"Intensity HNOX"]
+protGroups2b$FC <- protGroups2b$intHNOX - protGroups2b$intWT
+writexl::write_xlsx(protGroups2b, path = "Contrasts_20200910.xlsx")
+
 ############ Peptide processing and normalization ############
 # Present vs. absent:
 peptides2 <- peptides %>% select(id, `Intensity WT`, `Intensity HNOX`) %>% as.data.frame()

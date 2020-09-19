@@ -85,14 +85,15 @@ ggplot(df3b %>% filter(abs(V2) > 3), aes(y = dbe, x = CNumb, color = V2)) + geom
 
 ggplot
 
-# Probabalistic PCA
-pca1 <- prcomp(t(as.matrix(df3)), center = TRUE, scale = TRUE)
+# Regular PCA with small imputation:
+pca1 <- prcomp(t(as.matrix(df3)), center = TRUE, scale = FALSE)
 pca1X <- as.data.frame(pca1$x[,1:4])
 pca1L <- as.data.frame(pca1$rotation[,1:4])
 pca1X$lab <- rownames(pca1X)
 ggplot(pca1X, aes(x = PC1, y = PC2, label = lab)) + geom_point() + geom_label_repel()
 ggplot(pca1X, aes(x = PC2, y = PC3, label = lab)) + geom_point() + geom_label_repel()
 
+# Probabalistic PCA
 m1 <- t(as.matrix(df4))
 m2 <- scale(m1, center = FALSE, scale = FALSE)
 pca2 <- pcaMethods::pca(m2, method = "ppca", nPcs = 4, seed = 3)
@@ -114,8 +115,13 @@ ggplot(pca2L %>% filter(abs(PC2) > .02), aes(y = dbe, x = CNumb, color = PC2 * 1
 ggplot(pca2L %>% filter(abs(PC3) > .02), aes(y = dbe, x = CNumb, color = PC3 * 100)) + geom_point() + scale_color_distiller(palette = "Spectral") + 
   xlim(0, 40) + ylim(0, 25)
 
-png(file = "heatmap.png", height = 40, width = 10, units = "in", res = 300)
-gplots::heatmap.2(as.matrix(df3), cexRow = .05, trace = "none", density.info = "none")
+myPal <- colorRampPalette(c("red", "white", "blue"))(n = 299)
+png(file = "heatmap.png", height = 40, width = 10, units = "in", res = 800)
+gplots::heatmap.2(log(as.matrix(df3)), cexRow = .08, trace = "none", density.info = "none", col = myPal)
+dev.off()
+
+png(file = "heatmap2.png", height = 7, width = 7, units = "in", res = 500)
+gplots::heatmap.2(log(as.matrix(df3)), labRow = "", trace = "none", density.info = "none", col = myPal)
 dev.off()
 
 bdist <- vegan::vegdist(t(as.matrix(df3)), method = "bray")

@@ -137,7 +137,7 @@ abline(h = 0.95, col = "red")
 plot(sft$fitIndices[,1], sft$fitIndices[,5], xlab = "Soft Threshold (power)", ylab = "Mean Connectivity", type = "n",
      main = paste("Mean connectivity"))
 text(sft$fitIndices[,1], sft$fitIndices[,5], labels = powers, col = "red")
-softPower <- 8
+softPower <- 10
 par(oldPar)
 
 # Adjacency and distance matrices
@@ -149,8 +149,8 @@ dissTOM <- 1 - TOM
 tree <- hclust(as.dist(dissTOM), method = "complete")
 
 # Module identification using dynamic tree cut:
-dynamicMods <- dynamicTreeCut::cutreeDynamic(dendro = tree, distM = dissTOM, deepSplit = 2, pamRespectsDendro = TRUE,
-                                             minClusterSize = 15, method = "tree")
+dynamicMods <- dynamicTreeCut::cutreeDynamic(dendro = tree, distM = dissTOM, deepSplit = 4, pamRespectsDendro = TRUE,
+                                             minClusterSize = 20, method = "hybrid")
 dynamicColors <- WGCNA::labels2colors(dynamicMods)
 
 # Plot dendogram and module assignment:
@@ -169,90 +169,116 @@ WGCNA::TOMplot(dissTOM, tree, dynamicColors, main = "Module heatmap")
 dev.off()
 
 # Module-feature mapping:
-modDF <- data.frame(feature = rownames(TOM), module = dynamicColors2)
+modDF <- data.frame(feature = rownames(TOM), module = dynamicColors)
+modDF2 <- modDF
+modDF2 <- modDF2 %>% left_join(df3b %>% select(-V1, -V2), by = c("feature" = "dbeMF"))
+writexl::write_xlsx(modDF2, path = "featuresWModules.xlsx")
 as.data.frame(table(modDF$module)) %>% arrange(desc(Freq))
 
 ########### Module Plots ############
-# brown2 module:
-brown2TOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "brown2"], modDF$feature[modDF$module == "brown2"]]),
+# turquoise module:
+turquoiseTOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "turquoise"], modDF$feature[modDF$module == "turquoise"]]),
                           method = "complete")
-brown2Expression <- df3w[, modDF$feature[modDF$module == "brown2"]]
-png(filename = "Plots/modules/brown2.png", height = 6, width = 24, units = "in", res = 600)
-brown2Colors <- WGCNA::numbers2colors(brown2Expression, signed = TRUE, commonLim = FALSE)
-WGCNA::plotDendroAndColors(dendro = brown2TOMhClust, colors = t(brown2Colors),
-                           groupLabels = rownames(brown2Expression),
-                           cex.dendroLabels = .135, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
+turquoiseExpression <- df3w[, modDF$feature[modDF$module == "turquoise"]]
+png(filename = "Plots/modules/turquoise.png", height = 6, width = 24, units = "in", res = 600)
+turquoiseColors <- WGCNA::numbers2colors(turquoiseExpression, signed = TRUE, commonLim = FALSE)
+WGCNA::plotDendroAndColors(dendro = turquoiseTOMhClust, colors = t(turquoiseColors),
+                           groupLabels = rownames(turquoiseExpression),
+                           cex.dendroLabels = .17, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
 dev.off()
 
-# orangered3 module:
-orangered3TOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "orangered3"], modDF$feature[modDF$module == "orangered3"]]),
+# blue module:
+blueTOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "blue"], modDF$feature[modDF$module == "blue"]]),
                           method = "complete")
-orangered3Expression <- df3w[, modDF$feature[modDF$module == "orangered3"]]
-png(filename = "Plots/modules/orangered3.png", height = 6, width = 20, units = "in", res = 600)
-orangered3Colors <- WGCNA::numbers2colors(orangered3Expression, signed = TRUE, commonLim = FALSE)
-WGCNA::plotDendroAndColors(dendro = orangered3TOMhClust, colors = t(orangered3Colors),
-                           groupLabels = rownames(orangered3Expression),
-                           cex.dendroLabels = .2, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
+blueExpression <- df3w[, modDF$feature[modDF$module == "blue"]]
+png(filename = "Plots/modules/blue.png", height = 6, width = 20, units = "in", res = 600)
+blueColors <- WGCNA::numbers2colors(blueExpression, signed = TRUE, commonLim = FALSE)
+WGCNA::plotDendroAndColors(dendro = blueTOMhClust, colors = t(blueColors),
+                           groupLabels = rownames(blueExpression),
+                           cex.dendroLabels = .25, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
 dev.off()
 
-# coral module:
-coralTOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "coral"], modDF$feature[modDF$module == "coral"]]),
+# brown module:
+brownTOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "brown"], modDF$feature[modDF$module == "brown"]]),
                               method = "complete")
-coralExpression <- df3w[, modDF$feature[modDF$module == "coral"]]
-png(filename = "Plots/modules/coral.png", height = 6, width = 15, units = "in", res = 600)
-coralColors <- WGCNA::numbers2colors(coralExpression, signed = TRUE, commonLim = FALSE)
-WGCNA::plotDendroAndColors(dendro = coralTOMhClust, colors = t(coralColors),
-                           groupLabels = rownames(coralExpression),
-                           cex.dendroLabels = .275, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
+brownExpression <- df3w[, modDF$feature[modDF$module == "brown"]]
+png(filename = "Plots/modules/brown.png", height = 6, width = 15, units = "in", res = 600)
+brownColors <- WGCNA::numbers2colors(brownExpression, signed = TRUE, commonLim = FALSE)
+WGCNA::plotDendroAndColors(dendro = brownTOMhClust, colors = t(brownColors),
+                           groupLabels = rownames(brownExpression),
+                           cex.dendroLabels = .3, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
 dev.off()
 
-# indianred3 module:
-indianred3TOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "indianred3"], modDF$feature[modDF$module == "indianred3"]]),
+# yellow module:
+yellowTOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "yellow"], modDF$feature[modDF$module == "yellow"]]),
                          method = "complete")
-indianred3Expression <- df3w[, modDF$feature[modDF$module == "indianred3"]]
-png(filename = "Plots/modules/indianred3.png", height = 6, width = 15, units = "in", res = 600)
-indianred3Colors <- WGCNA::numbers2colors(indianred3Expression, signed = TRUE, commonLim = FALSE)
-WGCNA::plotDendroAndColors(dendro = indianred3TOMhClust, colors = t(indianred3Colors),
-                           groupLabels = rownames(indianred3Expression),
-                           cex.dendroLabels = .275, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
+yellowExpression <- df3w[, modDF$feature[modDF$module == "yellow"]]
+png(filename = "Plots/modules/yellow.png", height = 6, width = 15, units = "in", res = 600)
+yellowColors <- WGCNA::numbers2colors(yellowExpression, signed = TRUE, commonLim = FALSE)
+WGCNA::plotDendroAndColors(dendro = yellowTOMhClust, colors = t(yellowColors),
+                           groupLabels = rownames(yellowExpression),
+                           cex.dendroLabels = .35, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
 dev.off()
 
-# cyan module:
-cyanTOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "cyan"], modDF$feature[modDF$module == "cyan"]]),
+# green module:
+greenTOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "green"], modDF$feature[modDF$module == "green"]]),
                         method = "average")
-cyanExpression <- df3w[, modDF$feature[modDF$module == "cyan"]]
-png(filename = "Plots/modules/cyan.png", height = 6, width = 15, units = "in", res = 600)
-cyanColors <- WGCNA::numbers2colors(cyanExpression, signed = TRUE, commonLim = TRUE)
-WGCNA::plotDendroAndColors(dendro = cyanTOMhClust, colors = t(cyanColors),
-                           groupLabels = rownames(cyanExpression),
-                           cex.dendroLabels = 0.3, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
+greenExpression <- df3w[, modDF$feature[modDF$module == "green"]]
+png(filename = "Plots/modules/green.png", height = 6, width = 12, units = "in", res = 600)
+greenColors <- WGCNA::numbers2colors(greenExpression, signed = TRUE, commonLim = TRUE)
+WGCNA::plotDendroAndColors(dendro = greenTOMhClust, colors = t(greenColors),
+                           groupLabels = rownames(greenExpression),
+                           cex.dendroLabels = 0.5, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
 dev.off()
 
-# plum2 module:
-plum2TOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "plum2"], modDF$feature[modDF$module == "plum2"]]),
-                        method = "average")
-plum2Expression <- df3w[, modDF$feature[modDF$module == "plum2"]]
-png(filename = "Plots/modules/plum2.png", height = 6, width = 12, units = "in", res = 600)
-plum2Colors <- WGCNA::numbers2colors(plum2Expression, signed = TRUE, commonLim = TRUE)
-WGCNA::plotDendroAndColors(dendro = plum2TOMhClust, colors = t(plum2Colors),
-                           groupLabels = rownames(plum2Expression),
-                           cex.dendroLabels = 0.325, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
-dev.off()
-
-# purple module:
-purpleTOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "purple"], modDF$feature[modDF$module == "purple"]]),
+# red module:
+redTOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "red"], modDF$feature[modDF$module == "red"]]),
                          method = "average")
-purpleExpression <- df3w[, modDF$feature[modDF$module == "purple"]]
-png(filename = "Plots/modules/purple.png", height = 6, width = 12, units = "in", res = 600)
-purpleColors <- WGCNA::numbers2colors(purpleExpression, signed = TRUE, commonLim = TRUE)
-WGCNA::plotDendroAndColors(dendro = purpleTOMhClust, colors = t(purpleColors),
-                           groupLabels = rownames(purpleExpression),
-                           cex.dendroLabels = 0.325, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
+redExpression <- df3w[, modDF$feature[modDF$module == "red"]]
+png(filename = "Plots/modules/red.png", height = 6, width = 12, units = "in", res = 600)
+redColors <- WGCNA::numbers2colors(redExpression, signed = TRUE, commonLim = TRUE)
+WGCNA::plotDendroAndColors(dendro = redTOMhClust, colors = t(redColors),
+                           groupLabels = rownames(redExpression),
+                           cex.dendroLabels = 0.5, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
 dev.off()
 
+# black module:
+blackTOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "black"], modDF$feature[modDF$module == "black"]]),
+                       method = "average")
+blackExpression <- df3w[, modDF$feature[modDF$module == "black"]]
+png(filename = "Plots/modules/black.png", height = 6, width = 10, units = "in", res = 600)
+blackColors <- WGCNA::numbers2colors(blackExpression, signed = TRUE, commonLim = TRUE)
+WGCNA::plotDendroAndColors(dendro = blackTOMhClust, colors = t(blackColors),
+                           groupLabels = rownames(blackExpression),
+                           cex.dendroLabels = 0.5, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
+dev.off()
 
+# magenta module:
+magentaTOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "magenta"], modDF$feature[modDF$module == "magenta"]]),
+                         method = "average")
+magentaExpression <- df3w[, modDF$feature[modDF$module == "magenta"]]
+png(filename = "Plots/modules/magenta.png", height = 6, width = 10, units = "in", res = 600)
+magentaColors <- WGCNA::numbers2colors(magentaExpression, signed = TRUE, commonLim = TRUE)
+WGCNA::plotDendroAndColors(dendro = magentaTOMhClust, colors = t(magentaColors),
+                           groupLabels = rownames(magentaExpression),
+                           cex.dendroLabels = 0.5, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
+dev.off()
+
+# pink module:
+pinkTOMhClust <- hclust(as.dist(TOM[modDF$feature[modDF$module == "pink"], modDF$feature[modDF$module == "pink"]]),
+                           method = "average")
+pinkExpression <- df3w[, modDF$feature[modDF$module == "pink"]]
+png(filename = "Plots/modules/pink.png", height = 6, width = 10, units = "in", res = 600)
+pinkColors <- WGCNA::numbers2colors(pinkExpression, signed = TRUE, commonLim = TRUE)
+WGCNA::plotDendroAndColors(dendro = pinkTOMhClust, colors = t(pinkColors),
+                           groupLabels = rownames(pinkExpression),
+                           cex.dendroLabels = 0.5, cex.colorLabels = .7, marAll = c(1, 6, 3, 1), main = "")
+dev.off()
+
+########### Module PCs ###########
 mEigen1 <- WGCNA::moduleEigengenes(df3w, dynamicColors, impute = FALSE, nPC = 1, align = "along average", 
                                    excludeGrey = TRUE, grey = if (is.numeric(colors)) 0 else "grey", 
-                                   softPower = 9, scale = TRUE, verbose = 5, indent = 1)
-
-writexl::write_xlsx(modDF, path = paste0("Results/WGCNA_Modules_", gsub("-", "", Sys.Date()), ".xlsx"))
+                                   softPower = 10, scale = TRUE, verbose = 5, indent = 1)
+mEigen1T <- as.data.frame(t(mEigen1$eigengenes))
+mEigen1T$module <- gsub("ME", "", rownames(mEigen1T))
+writexl::write_xlsx(mEigen1T, path = "Eigen.xlsx")

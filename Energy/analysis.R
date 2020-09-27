@@ -172,7 +172,7 @@ dev.off()
 modDF <- data.frame(feature = rownames(TOM), module = dynamicColors)
 modDF2 <- modDF
 modDF2 <- modDF2 %>% left_join(df3b %>% select(-V1, -V2), by = c("feature" = "dbeMF"))
-writexl::write_xlsx(modDF2, path = "featuresWModules.xlsx")
+# writexl::write_xlsx(modDF2, path = "featuresWModules.xlsx")
 as.data.frame(table(modDF$module)) %>% arrange(desc(Freq))
 
 ########### Module Plots ############

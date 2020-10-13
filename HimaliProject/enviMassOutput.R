@@ -1,6 +1,6 @@
 ########### Prereqs ###########
 outputDir <- "C:/Users/ptrainor/Documents/GitHub/cail/HimaliProject/"
-EMProjectDir <- "C:/Users/ptrainor/Dropbox (NMSU Advanced)/Patrick/Himali/enviMassProc/results/"
+EMProjectDir <- "C:/Users/ptrainor/Dropbox (NMSU Advanced)/Patrick/Himali2/enviMassProc/results/"
 # Must run in R 3.3.3
 library(enviMass)
 setwd(outputDir)
@@ -61,4 +61,4 @@ for(i in 1:length(res_IS_pos_screen)){
 }
 iSTDDF <- do.call("rbind", iSTDLists)
 
-save(peaks, profs, profInfo, iSTDDF, linksDF, file = paste0(outputDir, "RData/enviMassOutput_20200826.RData"))
+save(peaks, profs, profInfo, iSTDDF, linksDF, file = paste0(outputDir, "RData/enviMassOutput_20201008.RData"))

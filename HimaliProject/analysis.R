@@ -422,3 +422,43 @@ ggplot(pca1DF, aes(x = PC2, y = PC3, label = sampleID)) + geom_point() +
   ggrepel::geom_text_repel(size = 2.75) + theme_bw() + labs(title = "PCA prior to normalization (scaled)") +
   theme(plot.title = element_text(hjust = 0.5))
 dev.off()
+
+########### Intensity distributions ###########
+# Profile data wide to long:
+profs2 <- profs
+profs2 <- as.data.frame(profs2)
+profs2$fileName <- rownames(profs2)
+profs2$fileName <- factor(profs2$fileName)
+profs2 <- profs2 %>% gather(key = "profID", value = "intensity", -fileName)
+# Filter out missing:
+profs2b <- profs2 %>% filter(intensity > 0)
+p1 <- ggplot(profs2b, aes(x = fileName, y = log10(intensity))) + geom_boxplot() + 
+  geom_hline(yintercept = median(log10(profs2b$intensity)), color = "darkblue", lwd = 1) +
+  theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "")
+
+# How many profiles found?
+profs3 <- as.data.frame(profs)
+profs3$fileName <- rownames(profs3)
+profs3$fileName <- factor(profs3$fileName)
+profs3 <- profs3 %>% gather(key = "profID", value = "intensity", -fileName)
+profs3 <- profs3 %>% mutate(isFound = ifelse(intensity > 0, 1, 0))
+profs3 <- profs3 %>% group_by(fileName) %>% summarize(profiles = sum(isFound))
+
+p2 <- ggplot(profs3, aes(x = fileName, y = profiles)) + geom_point() + 
+  geom_hline(yintercept = median(profs3$profiles), color = "darkred", lwd = 1) +
+  theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "")
+
+png(filename = paste0("./Plots/Intens_",gsub("-", "", Sys.Date()), ".png"),
+    height = 5, width = 7, units = "in", res = 600)
+p1
+dev.off()
+
+png(filename = paste0("./Plots/PeakCount_",gsub("-", "", Sys.Date()), ".png"),
+    height = 5, width = 7, units = "in", res = 600)
+p2
+dev.off()
+
+png(filename = paste0("./Plots/IntensPeakCount_",gsub("-", "", Sys.Date()), ".png"),
+    height = 10, width = 7, units = "in", res = 600)
+gridExtra::grid.arrange(p1, p2, nrow = 2)
+dev.off()

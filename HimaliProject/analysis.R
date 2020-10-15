@@ -79,7 +79,7 @@ for(i in 1:nrow(profInfo2)){
         l1[[j]] <- NULL
       }
     }
-    if(sum(sapply(l1, function(x) !is.null(x))) > 0){
+    if(length(l1) > 0 && sum(sapply(l1, function(x) !is.null(x))) > 0){
       l1 <- rlist::list.clean(l1)
       mSpec1 <- MSpectra(l1)
       combMSMS <- combineSpectra(MSpectra(l1), method = combFun)
@@ -284,8 +284,11 @@ topHit <- res4
 allHits <- res5
 
 save(topHit, allHits, file = "metFragCand_20201010.RData")
+save.image("working_20201010c.RData")
 
 ############ Some processing of iSTD data ############
+load("working_20201010c.RData")
+
 # Split ID from the enviMass output:
 iSTDDF$iSTD_ID <- gsub("_none_none_none", "", iSTDDF$iSTD_ID)
 temp1 <- str_split(iSTDDF$iSTD_ID, "_", simplify = TRUE)
@@ -304,13 +307,19 @@ presentISTD$Label[is.na(presentISTD$Label)] <- paste0("Pool", 1:5)
 ############ Some processing of profile data ############
 # Set rownames on that data:
 rownames(profs) <- sampleAnno$Label[match(rownames(profs), sampleAnno$ID)]
+rownames(profs)[is.na(rownames(profs))] <- paste0("Pool", 1:5)
 aSProfs <- profs
 
 # Which are 0:
 which(aSProfs == 0, arr.ind = TRUE)
 
+# Remove those that are zero in all non-pool samples:
+temp1 <- aSProfs[!grepl("Pool",rownames(aSProfs)),]
+nonZeros <- apply(temp1, 2, function(x) sum(x > 0) > 0)
+aSProfs <- aSProfs[, nonZeros]
+
 # Imputation Function
-minNonZero <- function(x) min(x[x > 0]) / 2
+minNonZero <- function(x) min(x[x > 0]) / 3
 impFun <- function(x){
   if(sum(x == 0) > 0){
     x[x == 0] <- minNonZero(x)
@@ -324,21 +333,21 @@ aSProfs <- apply(aSProfs, 2, impFun)
 aSProfs <- log10(aSProfs)
 
 # Entropy filter:
-entropyFun <- function(x) entropy::entropy(entropy::discretize(x, numBins = 6), unit = "log2")
-colEntropies <- apply(aSProfs, 2, entropyFun)
+entropyFun <- function(x) entropy::entropy(entropy::discretize(x, numBins = 8), unit = "log2")
+colEntropies <- apply(aSProfs[!grepl("Pool",rownames(aSProfs)),], 2, entropyFun)
 hist(colEntropies)
 colEntropies <- as.data.frame(colEntropies)
 
-# png(filename = "./Plots/EntropyFilter1.png", height = 3, width = 4, units = "in", res = 600)
-ggplot(colEntropies, aes(x = colEntropies)) + geom_histogram(bins = 35, color = "black", fill = "lightblue") + 
+png(filename = "./Plots/Entropy.png", height = 3, width = 4, units = "in", res = 600)
+ggplot(colEntropies, aes(x = colEntropies)) + geom_histogram(bins = 20, color = "black", fill = "lightblue") + 
   geom_vline(xintercept = 1, lty = 2, color = "darkred") + 
   labs(title = "Shannon entropy of peak intensities", x = "Entropy (Log2)", y = "Frequency") +
   theme_bw()
-# dev.off()
+dev.off()
 
 ############ Viz prior to normalization ############
-# Heatmap #LOH
-col1 <- colorRampPalette(RColorBrewer::brewer.pal(10, "RdYlBu"))(256)
+# Heatmap
+col1 <- rev(colorRampPalette(RColorBrewer::brewer.pal(10, "RdYlBu"))(256))
 
 png(filename = "Plots/heatmap.png", height = 5, width = 7, units = "in", res = 300)
 pheatmap::pheatmap(aSProfs, colsep = "", clustering_method = "ward.D2", color = col1,
@@ -350,8 +359,30 @@ pheatmap::pheatmap(aSProfs[, colEntropies > 2], colsep = "", clustering_method =
                    show_colnames = FALSE)
 dev.off()
 
-# PCA
-pca1 <- prcomp(aSProfs)
+# Heatmap on centered data:
+png(filename = "Plots/heatmapCentered.png", height = 5, width = 7, units = "in", res = 300)
+pheatmap::pheatmap(scale(aSProfs, scale = FALSE), colsep = "", clustering_method = "ward.D2", color = col1,
+                   show_colnames = FALSE)
+dev.off()
+
+png(filename = "Plots/heatmapCentered_wEntropy.png", height = 5, width = 7, units = "in", res = 300)
+pheatmap::pheatmap(scale(aSProfs[, colEntropies > 2], scale = FALSE), colsep = "", clustering_method = "ward.D2", color = col1,
+                   show_colnames = FALSE)
+dev.off()
+
+# Heatmap on centered and scaled data:
+png(filename = "Plots/heatmapCenteredScaled.png", height = 5, width = 7, units = "in", res = 300)
+pheatmap::pheatmap(scale(aSProfs, scale = TRUE), colsep = "", clustering_method = "ward.D2", color = col1,
+                   show_colnames = FALSE)
+dev.off()
+
+png(filename = "Plots/heatmapCenteredScaled_wEntropy.png", height = 5, width = 7, units = "in", res = 300)
+pheatmap::pheatmap(scale(aSProfs[, colEntropies > 2], scale = TRUE), colsep = "", clustering_method = "ward.D2", color = col1,
+                   show_colnames = FALSE)
+dev.off()
+
+# PCA prior to norm
+pca1 <- prcomp(aSProfs[!grepl("Pool",rownames(aSProfs)), colEntropies > 1])
 pca1DF <- as.data.frame(pca1$x[, 1:4])
 pca1DF$sampleID <- rownames(pca1DF)
 
@@ -368,5 +399,26 @@ png(filename = paste0("./Plots/PCA_prior2Norm_23_", gsub("-", "", Sys.Date()), "
 set.seed(3)
 ggplot(pca1DF, aes(x = PC2, y = PC3, label = sampleID)) + geom_point() + 
   ggrepel::geom_text_repel(size = 2.75) + theme_bw() + labs(title = "PCA prior to normalization") +
+  theme(plot.title = element_text(hjust = 0.5))
+dev.off()
+
+# PCA prior to norm scaled
+pca1 <- prcomp(aSProfs[!grepl("Pool",rownames(aSProfs)), colEntropies > 1], scale = TRUE)
+pca1DF <- as.data.frame(pca1$x[, 1:4])
+pca1DF$sampleID <- rownames(pca1DF)
+
+png(filename = paste0("./Plots/PCA_prior2Norm_Scaled_", gsub("-", "", Sys.Date()), ".png"),
+    height = 5.5, width = 6, units = "in", res = 600)
+set.seed(3)
+ggplot(pca1DF, aes(x = PC1, y = PC2, label = sampleID)) + geom_point() + 
+  ggrepel::geom_text_repel(size = 2.75) + theme_bw() + labs(title = "PCA prior to normalization (scaled)") +
+  theme(plot.title = element_text(hjust = 0.5))
+dev.off()
+
+png(filename = paste0("./Plots/PCA_prior2Norm_23_Scaled_", gsub("-", "", Sys.Date()), ".png"),
+    height = 5.5, width = 6, units = "in", res = 600)
+set.seed(3)
+ggplot(pca1DF, aes(x = PC2, y = PC3, label = sampleID)) + geom_point() + 
+  ggrepel::geom_text_repel(size = 2.75) + theme_bw() + labs(title = "PCA prior to normalization (scaled)") +
   theme(plot.title = element_text(hjust = 0.5))
 dev.off()

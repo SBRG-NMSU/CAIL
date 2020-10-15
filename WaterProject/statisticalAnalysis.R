@@ -76,7 +76,7 @@ fenIn$feature <- as.character(as.integer(fenIn$feature))
 fenIn2 <- fenIn %>% select(feature, precursorMZ, RT) %>% unique()
 
 # Import MetFrag results:
-load(file = "RData/metFragCand_20200804.RData")
+load(file = "RData/metFragCand_20200927.RData")
 
 ############ Some processing of iSTD data ############
 # Split ID from the enviMass output:
@@ -268,10 +268,10 @@ gridExtra::grid.arrange(p1, p3, nrow = 2)
 rm(colEntropies, iSTDCV, iSTDDF, iSTDs, medNorm, mISTD, mISTD2, mISTD3, mISTD4, p1, p2, p3, p4, p5,
    pca1, pca1DF, presentISTD, temp1, actSamps, entropyFun, misCheckFun, medByFile, profs2b, profs3)
 
-save.image("RData/working_20200714.RData")
+save.image("RData/working_20200927.RData")
 
 ########### Overall Present vs Absent ###########
-load("RData/working_20200714.RData")
+load("RData/working_20200927.RData")
 
 pvsA <- profs2 %>% left_join(sampleAnno %>% select(Name, ST = tag3), by = c("fileName" = "Name"))
 pvsA$ST <- str_split(pvsA$ST, "-|_", simplify = TRUE)[,1]
@@ -292,7 +292,7 @@ pvsA %>% select(profID, ST, AllPresent) %>% group_by(ST, AllPresent) %>%
   filter(AllPresent == TRUE) %>% ungroup() %>% select(-AllPresent)
 
 ########### Algal time course ###########
-load("RData/working_20200714.RData")
+load("RData/working_20200927.RData")
 
 # First get data for the profiles for AE:
 profs3 <- profs2 %>% filter(grepl("AE-", fileName))
@@ -302,7 +302,7 @@ profs3$whichSP <- ifelse(grepl("AE-3|AE-4", profs3$fileName), "AE-3/4", "AE-1")
 
 # Processing for time-course:
 # 1. Remove profiles not observed in >40% of AE-1, AE-3, and AE-4 samples
-# 2. Remove profiles with average peak area less than 5×10^6 in both AE-1 and AE-3/4
+# 2. Remove profiles with average peak area less than 5?10^6 in both AE-1 and AE-3/4
 
 # Filter out super missing:
 profs3 %>% select(profID) %>% unique() %>% nrow() # 53,672 profiles
@@ -409,7 +409,7 @@ ggplot(profs3 %>% filter(profID == 16791), aes(x = cycle, color = whichSP, y = l
 # Export time-course data:
 AE_TC <- AE_TC %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
                           adduct, formula, howID = id, topCandidate = name, 
-                          InChI, InChIKey, SMILES, links,
+                          InChI, InChIKey, SMILES, links, (kingdom:level9),
                           slope1, slope34, AE34minusAE1 = AE34minAE1, slope1p, slope34p, AE34minusAE1p = AE34minAE1p,
                           slope1q, slope34q, AE34minusAE1q = AE34minAE1q)
 writexl::write_xlsx(AE_TC, path = paste0("Results/AE_Timecourse_", gsub("-", "", Sys.Date()), ".xlsx"))
@@ -419,10 +419,10 @@ rm(lm0, lm1, p1, p2, p3, p4, p5, pca1, pca1DF, pMatch2, temp1, temp2, temp3, col
    pMatch1, pMatch3, i, profs3, AE_TC2)
 
 # Save:
-save.image("RData/working_20200714b.RData")
+save.image("RData/working_20200927b.RData")
 
 ########### Algal present versus absent ###########
-load("RData/working_20200714b.RData")
+load("RData/working_20200927b.RData")
 
 # First get data for the profiles for AE:
 profs3 <- profs2 %>% filter(grepl("AE-", fileName))
@@ -472,7 +472,7 @@ for(i in 1:nrow(Pres)){
     Pres$pValue[i] <- 1
   }
   
-  # Eports:
+  # Exports:
   Pres2[[i]] <- cbind(profID = Pres$profID[i], temp2, temp3)
   print(i)
 }
@@ -488,7 +488,7 @@ Pres <- Pres %>% left_join(profInfo2 %>%
    by = c("profID" = "profile_ID")) %>% left_join(topHit, by = c("profID" = "prof")) %>% left_join(linksDF)
 Pres <- Pres %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
                  adduct, formula, howID = id, topCandidate = name, 
-                 InChI, InChIKey, SMILES, links,
+                 InChI, InChIKey, SMILES, links, (kingdom:level9),
                 `Absent_AE-1_Freq`, `Absent_AE-3/4_Freq`, `Intermediate_AE-1_Freq`, `Intermediate_AE-3/4_Freq`,
                 `Present_AE-1_Freq`, `Present_AE-3/4_Freq`, `Absent_AE-1_Prop`, `Absent_AE-3/4_Prop`,
                 `Intermediate_AE-1_Prop`, `Intermediate_AE-3/4_Prop`, `Present_AE-1_Prop`, `Present_AE-3/4_Prop`, 
@@ -521,11 +521,11 @@ writexl::write_xlsx(Pres, path = paste0("Results/AE_Pres_", gsub("-", "", Sys.Da
 
 # Save and cleanup:
 Pres_AE <- Pres
-rm(Pres, Pres2, wc1, wc2, temp1, temp2, temp3, profs3, test1)
-save.image("RData/working_20200702c.RData")
+rm(Pres, Pres2, wc2, temp1, temp2, temp3, profs3, test1)
+save.image("RData/working_20200927c.RData")
 
 ########### Secondary Effluent to RO ###########
-load("RData/working_20200702c.RData")
+load("RData/working_20200927c.RData")
 
 # First get data for the profiles for Secondary Effluent and RO:
 profs3 <- profs2 %>% filter((grepl("SE-", fileName) & !grepl("Pool", fileName)) | 
@@ -598,7 +598,7 @@ Pres <- Pres %>% left_join(profInfo2 %>%
      by = c("profID" = "profile_ID")) %>% left_join(topHit, by = c("profID" = "prof")) %>% left_join(linksDF)
 Pres <- Pres %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
         adduct, formula, howID = id, topCandidate = name, 
-        InChI, InChIKey, SMILES, links,
+        InChI, InChIKey, SMILES, links, (kingdom:level9),
         `Absent_SE_Freq`, `Absent_RO_Freq`, `Intermediate_SE_Freq`, `Intermediate_RO_Freq`,
         `Present_SE_Freq`, `Present_RO_Freq`, `Absent_SE_Prop`, `Absent_RO_Prop`,
         `Intermediate_SE_Prop`, `Intermediate_RO_Prop`, `Present_SE_Prop`, `Present_RO_Prop`, 
@@ -633,10 +633,10 @@ writexl::write_xlsx(Pres, path = paste0("Results/SE_Product_Pres_", gsub("-", ""
 # Save and cleanup:
 Pres_SE_RO <- Pres
 rm(Pres, Pres2, test1, temp1, temp2, temp3, profs3)
-save.image("RData/working_20200702d.RData")
+save.image("RData/working_20200927d.RData")
 
 ########### Secondary Effluent to Secondary RO ###########
-load("RData/working_20200702d.RData")
+load("RData/working_20200927d.RData")
 
 # First get data for the profiles for Secondary Effluent and product water:
 profs3 <- profs2 %>% filter((grepl("SE-", fileName) & !grepl("Pool", fileName)) | 
@@ -708,7 +708,7 @@ Pres <- Pres %>% left_join(profInfo2 %>%
 
 Pres <- Pres %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
                         adduct, formula, howID = id, topCandidate = name,
-                        InChI, InChIKey, SMILES, links,
+                        InChI, InChIKey, SMILES, links, (kingdom:level9),
                         `Absent_SE_Freq`, `Absent_SecondaryRO_Freq`, `Intermediate_SE_Freq`, `Intermediate_SecondaryRO_Freq`,
                         `Present_SE_Freq`, `Present_SecondaryRO_Freq`, `Absent_SE_Prop`, `Absent_SecondaryRO_Prop`,
                         `Intermediate_SE_Prop`, `Intermediate_SecondaryRO_Prop`, `Present_SE_Prop`, `Present_SecondaryRO_Prop`, 
@@ -744,10 +744,10 @@ writexl::write_xlsx(Pres, path = paste0("Results/SE_SecondaryRO_Pres_", gsub("-"
 # Save and cleanup:
 Pres_SE_SecondaryRO <- Pres
 rm(Pres, Pres2, test1, temp1, temp2, temp3, profs3)
-save.image("RData/working_20200702e.RData")
+save.image("RData/working_20200927e.RData")
 
 ########### Algal Effluent to RO ###########
-load("RData/working_20200702e.RData")
+load("RData/working_20200927e.RData")
 
 # First get data for the profiles for Secondary Effluent and product water:
 profs3 <- profs2 %>% filter((grepl("AE-", fileName) & !grepl("Pool", fileName)) | 
@@ -822,7 +822,7 @@ Pres <- Pres %>% left_join(profInfo2 %>%
 
 Pres <- Pres %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
                         adduct, formula, howID = id, topCandidate = name,
-                        InChI, InChIKey, SMILES, links,
+                        InChI, InChIKey, SMILES, links, (kingdom:level9),
                         `Absent_AE_Freq`, `Absent_RO_Freq`, `Intermediate_AE_Freq`, `Intermediate_RO_Freq`,
                         `Present_AE_Freq`, `Present_RO_Freq`, `Absent_AE_Prop`, `Absent_RO_Prop`,
                         `Intermediate_AE_Prop`, `Intermediate_RO_Prop`, `Present_AE_Prop`, `Present_RO_Prop`, 
@@ -858,7 +858,7 @@ writexl::write_xlsx(Pres, path = paste0("Results/AE_RO_Pres_", gsub("-", "", Sys
 # Save and cleanup:
 Pres_AE_RO <- Pres
 rm(Pres, Pres2, test1, temp1, temp2, temp3, profs3)
-save.image("RData/working_20200702f.RData")
+save.image("RData/working_20200927f.RData")
 
 ########### RO Time Course ###########
 load("RData/working_20200702f.RData")
@@ -874,7 +874,7 @@ profs3$logIntensity <- log10(profs3$intensity)
 
 # Processing for time-course:
 # 1. Remove profiles not observed in >40% of samples
-# 2. Remove profiles with average peak area less than 5×10^6 in samples
+# 2. Remove profiles with average peak area less than 5?10^6 in samples
 
 # Filter out super missing:
 profs3 %>% select(profID) %>% unique() %>% nrow() # 53,672 profiles
@@ -944,6 +944,6 @@ ggplot(profs3 %>% filter(profID == 42274), aes(x = cycle, y = log10(intensity)))
 # Export time-course data:
 TC <- TC %>% select(profID, mz = profile_mean_mass, rt = profile_mean_RT_min, neutral_mass,
                           adduct, formula, howID = id, topCandidate = name, 
-                          InChI, InChIKey, SMILES, links,
+                          InChI, InChIKey, SMILES, links, (kingdom:level9),
                           slope, slopeP, slopeQ)
 writexl::write_xlsx(TC, path = paste0("Results/RO_Timecourse_", gsub("-", "", Sys.Date()), ".xlsx"))

@@ -1,4 +1,5 @@
 ########### Prereqs ###########
+# Begin always run:
 options(stringsAsFactors = FALSE, scipen = 600, max.print = 100000)
 oldPar <- par()
 library(tidyverse)
@@ -8,6 +9,7 @@ os <- Sys.info()
 baseDir <- ifelse(os["sysname"] == "Windows", ifelse(os["nodename"] == "CAHF-RSCH-SK147",
     "C:/Users/ptrainor/Documents/GitHub/cail/","C:/Users/ptrainor/gdrive/CAIL/"), "~/gdrive/CAIL/")
 setwd(paste0(baseDir, "HimaliProject/"))
+# End always run:
 
 ########### Import and lite processing ###########
 # Read in sample annotation:
@@ -338,9 +340,9 @@ colEntropies <- apply(aSProfs[!grepl("Pool",rownames(aSProfs)),], 2, entropyFun)
 hist(colEntropies)
 colEntropies <- as.data.frame(colEntropies)
 
-png(filename = "./Plots/Entropy.png", height = 3, width = 4, units = "in", res = 600)
+png(filename = "./Plots/Entropy.png", height = 4, width = 5.5, units = "in", res = 300)
 ggplot(colEntropies, aes(x = colEntropies)) + geom_histogram(bins = 20, color = "black", fill = "lightblue") + 
-  geom_vline(xintercept = 1, lty = 2, color = "darkred") + 
+  geom_vline(xintercept = 1.25, lty = 2, color = "darkred") + 
   labs(title = "Shannon entropy of peak intensities", x = "Entropy (Log2)", y = "Frequency") +
   theme_bw()
 dev.off()
@@ -355,7 +357,7 @@ pheatmap::pheatmap(aSProfs, colsep = "", clustering_method = "ward.D2", color = 
 dev.off()
 
 png(filename = "Plots/heatmap_wEntropy.png", height = 5, width = 7, units = "in", res = 300)
-pheatmap::pheatmap(aSProfs[, colEntropies > 2], colsep = "", clustering_method = "ward.D2", color = col1,
+pheatmap::pheatmap(aSProfs[, colEntropies > 1.25], colsep = "", clustering_method = "ward.D2", color = col1,
                    show_colnames = FALSE)
 dev.off()
 
@@ -366,7 +368,7 @@ pheatmap::pheatmap(scale(aSProfs, scale = FALSE), colsep = "", clustering_method
 dev.off()
 
 png(filename = "Plots/heatmapCentered_wEntropy.png", height = 5, width = 7, units = "in", res = 300)
-pheatmap::pheatmap(scale(aSProfs[, colEntropies > 2], scale = FALSE), colsep = "", clustering_method = "ward.D2", color = col1,
+pheatmap::pheatmap(scale(aSProfs[, colEntropies > 1.25], scale = FALSE), colsep = "", clustering_method = "ward.D2", color = col1,
                    show_colnames = FALSE)
 dev.off()
 
@@ -377,12 +379,12 @@ pheatmap::pheatmap(scale(aSProfs, scale = TRUE), colsep = "", clustering_method 
 dev.off()
 
 png(filename = "Plots/heatmapCenteredScaled_wEntropy.png", height = 5, width = 7, units = "in", res = 300)
-pheatmap::pheatmap(scale(aSProfs[, colEntropies > 2], scale = TRUE), colsep = "", clustering_method = "ward.D2", color = col1,
+pheatmap::pheatmap(scale(aSProfs[, colEntropies > 1.25], scale = TRUE), colsep = "", clustering_method = "ward.D2", color = col1,
                    show_colnames = FALSE)
 dev.off()
 
 # PCA prior to norm
-pca1 <- prcomp(aSProfs[!grepl("Pool",rownames(aSProfs)), colEntropies > 1])
+pca1 <- prcomp(aSProfs[!grepl("Pool",rownames(aSProfs)), colEntropies > 1.25])
 pca1DF <- as.data.frame(pca1$x[, 1:4])
 pca1DF$sampleID <- rownames(pca1DF)
 
@@ -403,7 +405,7 @@ ggplot(pca1DF, aes(x = PC2, y = PC3, label = sampleID)) + geom_point() +
 dev.off()
 
 # PCA prior to norm scaled
-pca1 <- prcomp(aSProfs[!grepl("Pool",rownames(aSProfs)), colEntropies > 1], scale = TRUE)
+pca1 <- prcomp(aSProfs[!grepl("Pool",rownames(aSProfs)), colEntropies > 1.25], scale = TRUE)
 pca1DF <- as.data.frame(pca1$x[, 1:4])
 pca1DF$sampleID <- rownames(pca1DF)
 
@@ -462,3 +464,92 @@ png(filename = paste0("./Plots/IntensPeakCount_",gsub("-", "", Sys.Date()), ".pn
     height = 10, width = 7, units = "in", res = 600)
 gridExtra::grid.arrange(p1, p2, nrow = 2)
 dev.off()
+
+########### Median deviation normalization ###########
+medByFile <- profs2b %>% group_by(fileName) %>% summarize(medInt = median(intensity))
+medNorm <- medByFile %>% mutate(grandMed = median(medInt), medRatio = medInt / grandMed, multFactorDist = 1 / medRatio)
+
+########### IS-based normalization ###########
+mISTD2 <- mISTD %>% group_by(file_ID, Name) %>% select(file_ID, Name, Intensity) %>% as.data.frame()
+mISTD2 <- mISTD2 %>% left_join(presentISTD %>% select(ID, Label), by = c("file_ID" = "ID"))
+
+# Remove one outlier:
+mISTD2 <- mISTD2 %>% filter(!(Name == "Atrazine-D5" & file_ID == 16) & 
+                              !(Name == "Caffeine-13C3" & file_ID == 1))
+iSTDCV <- mISTD2 %>% group_by(Name) %>% summarize(cv = sd(Intensity) / mean(Intensity))
+
+# Filter for the ones that work:
+mISTD3 <- mISTD2 %>% filter(Name %in% iSTDCV$Name[iSTDCV$cv < .20])
+mISTD3 <- mISTD3 %>% group_by(Name) %>% 
+  mutate(medInt = median(Intensity, na.rm = TRUE), medRatio = Intensity / medInt)
+mISTD4 <- mISTD3 %>% group_by(Label) %>% summarize(medMedRatio = median(medRatio), 
+                                                   multFactorISTD = 1 / medMedRatio) 
+
+p4 <- ggplot(mISTD3, aes(x = Name, y = log10(Intensity), color = Label, group = Label)) + geom_point() + 
+  geom_line() + theme_bw() + labs(color = "Type") + theme(axis.text.x = element_text(angle = 90))
+
+png(filename = paste0("./Plots/iSTDIntens_",gsub("-", "", Sys.Date()), ".png"),
+    height = 4, width = 8, units = "in", res = 600)
+p4
+dev.off()
+
+# Join two normalization df's:
+medNorm <- medNorm %>% left_join(mISTD4, by = c("fileName" = "Label"))
+medNorm$multFactor <- .5 * (medNorm$multFactorISTD + medNorm$multFactorDist)
+medNorm$multFactor <- .5 * (1 + medNorm$multFactor)
+
+# Scale the data:
+sProfs <- profs
+for(i in 1:nrow(sProfs)){
+  sProfs[i, ] <- sProfs[i, ] * medNorm$multFactor[match(rownames(sProfs)[i], medNorm$fileName)]
+}
+
+# Make a new boxplot
+profs2 <- sProfs
+profs2 <- as.data.frame(profs2)
+profs2$fileName <- rownames(profs2)
+profs2$fileName <- factor(profs2$fileName)
+profs2 <- profs2 %>% gather(key = "profID", value = "intensity", -fileName)
+# Filter out missing:
+profs2b <- profs2 %>% filter(intensity > 0)
+p3 <- ggplot(profs2b, aes(x = fileName, y = log10(intensity))) + geom_boxplot() + 
+  geom_hline(yintercept = median(log10(profs2b$intensity)), color = "darkblue", lwd = 1) +
+  theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "")
+
+png(filename = paste0("./Plots/IntensNorm_",gsub("-", "", Sys.Date()), ".png"),
+    height = 5, width = 7, units = "in", res = 600)
+p3
+dev.off()
+
+rm(colEntropies, iSTDCV, iSTDDF, iSTDs, medNorm, mISTD, mISTD2, mISTD3, mISTD4, p1, p2, p3, p4, p5,
+   pca1, pca1DF, presentISTD, temp1, entropyFun, medByFile, profs2b, profs3)
+
+############ Get classyfire classification for top hits ############
+# Import MetFrag results:
+hitsList <- list()
+for(i in 1:nrow(topHit)){
+  if(topHit$InChI[i] != ""){
+    hit <- classyfireR::get_classification(topHit$InChIKey[i])
+    if(!is.null(hit)){
+      hitClassDF <- hit@classification
+      hitClassDF$Level <- factor(hitClassDF$Level, levels = hitClassDF$Level)
+      hitClassDF <- hitClassDF %>% select(-CHEMONT) %>% spread(key = Level, value = Classification)
+      hitClassDF$prof <- topHit$prof[i]
+      hitsList[[i]] <- hitClassDF
+      cat("Successful: ", i, "\n")
+    }
+    else{
+      cat("Not successful: ", i, "\n")
+    }
+  }
+}
+hitList <- do.call("bind_rows", hitsList)
+hitList <- hitList %>% select(prof, kingdom, superclass, class, subclass, level5 = `level 5`, 
+                              level6 = `level 6`, level7 = `level 7`, level8 = `level 8`)
+topHit <- topHit %>% left_join(hitList)
+
+save.image("working_20201010d.RData")
+
+############ Export ############
+load("working_20201010d.RData")
+

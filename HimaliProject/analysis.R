@@ -553,3 +553,12 @@ save.image("working_20201010d.RData")
 ############ Export ############
 load("working_20201010d.RData")
 
+sProfsT <- as.data.frame(t(sProfs))
+sProfsT$id <- rownames(sProfsT)
+exportDF <- profInfo2 %>% left_join(topHit, by = c("profile_ID" = "prof")) %>% 
+  filter(id == "MS1 + MS2") %>% 
+  select(id = profile_ID, mass = profile_mean_mass, rtSec = profile_mean_RT_s, 
+         rtMin = profile_mean_RT_min, adduct = metFragAdduct, formula, name, superclass, 
+         class, subclass, subsubclass = level5, subsubsubclass = level6) %>%
+  left_join(sProfsT)
+writexl::write_xlsx(exportDF, path = "export.xlsx")

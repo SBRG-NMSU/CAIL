@@ -474,7 +474,7 @@ mISTD2 <- mISTD %>% group_by(file_ID, Name) %>% select(file_ID, Name, Intensity)
 mISTD2 <- mISTD2 %>% left_join(presentISTD %>% select(ID, Label), by = c("file_ID" = "ID"))
 
 # Remove one outlier:
-mISTD2 <- mISTD2 %>% filter(!(Name == "Atrazine-D5" & file_ID == 16) & 
+mISTD2 <- mISTD2 %>% filter(!(Name == "Atrazine-D5" & file_ID == 16) &
                               !(Name == "Caffeine-13C3" & file_ID == 1))
 iSTDCV <- mISTD2 %>% group_by(Name) %>% summarize(cv = sd(Intensity) / mean(Intensity))
 
@@ -524,7 +524,11 @@ dev.off()
 rm(colEntropies, iSTDCV, iSTDDF, iSTDs, medNorm, mISTD, mISTD2, mISTD3, mISTD4, p1, p2, p3, p4, p5,
    pca1, pca1DF, presentISTD, temp1, entropyFun, medByFile, profs2b, profs3)
 
+save.image("working_20201010d.RData")
+
 ############ Get classyfire classification for top hits ############
+load("working_20201010d.RData")
+
 # Import MetFrag results:
 hitsList <- list()
 for(i in 1:nrow(topHit)){
@@ -548,11 +552,13 @@ hitList <- hitList %>% select(prof, kingdom, superclass, class, subclass, level5
                               level6 = `level 6`, level7 = `level 7`, level8 = `level 8`)
 topHit <- topHit %>% left_join(hitList)
 
-save.image("working_20201010d.RData")
+save.image("working_20201010e.RData")
 
-############ Export ############
-load("working_20201010d.RData")
+############ Collapsing profiles ############
+load("working_20201010e.RData")
 
+
+########### Export ###########
 sProfsT <- as.data.frame(t(sProfs))
 sProfsT$id <- rownames(sProfsT)
 exportDF <- profInfo2 %>% left_join(topHit, by = c("profile_ID" = "prof")) %>% 
@@ -561,4 +567,4 @@ exportDF <- profInfo2 %>% left_join(topHit, by = c("profile_ID" = "prof")) %>%
          rtMin = profile_mean_RT_min, adduct = metFragAdduct, formula, name, superclass, 
          class, subclass, subsubclass = level5, subsubsubclass = level6) %>%
   left_join(sProfsT)
-writexl::write_xlsx(exportDF, path = "export.xlsx")
+writexl::write_xlsx(exportDF, path = "export_20201027.xlsx")

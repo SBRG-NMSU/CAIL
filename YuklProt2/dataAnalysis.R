@@ -2,58 +2,100 @@
 options(stringsAsFactors = FALSE, scipen = 900)
 oldPar <- par()
 os <- Sys.info()["sysname"]
-baseDir <- ifelse(os == "Windows", "C:/Users/ptrainor/gdrive/CAIL/YuklProt/PrelimData/", 
-                  "~/gdrive/CAIL/YuklProt/PrelimData/")
+baseDir <- ifelse(os == "Windows", "C:/Users/ptrainor/gdrive/CAIL/YuklProt2/", 
+                  "~/gdrive/CAIL/YuklProt2/")
 setwd(baseDir)
 
 library(tidyverse)
+library(ggrepel)
 
 theme_set(theme_bw())
 theme_update(plot.title = element_text(hjust = 0.5))
 
 ############ Import and process text files ############
-peptides <- readxl::read_excel("txt/peptides.xlsx", guess_max = 100000)
-evidence <- readxl::read_excel("txt/evidence.xlsx", guess_max = 100000)
-protGroups <- readxl::read_excel("txt/proteinGroups.xlsx", guess_max = 100000)
-msmsScan <- readxl::read_excel("txt/msmsScans.xlsx", guess_max = 100000)
-msms <- readxl::read_excel("txt/msms.xlsx", guess_max = 100000)
-pSTY <- readxl::read_excel("txt/Phospho (STY)Sites.xlsx", guess_max = 100000)
-modPep <- readxl::read_excel("txt/modificationSpecificPeptides.xlsx", guess_max = 100000)
+allPeptides <- read.delim("txt/allPeptides.txt", check.names = FALSE)
 
-swissprot <- read.csv("uniprot-reviewed yes+taxonomy 318586.csv", sep="\t")
+peptides <- read.delim("txt/peptides.txt", check.names = FALSE)
+evidence <- read.delim("txt/evidence.txt", check.names = FALSE)
+protGroups <- read.delim("txt/proteinGroups.txt", check.names = FALSE)
+msmsScan <- read.delim("txt/msmsScans.txt", check.names = FALSE)
+msms <- read.delim("txt/msms.txt", check.names = FALSE)
+modPep <- read.delim("txt/modificationSpecificPeptides.txt", check.names = FALSE)
 
-############ Possible phosphorylated protein ############
-poss1 <- protGroups %>% filter(id == 364)
-poss1Pep <- peptides %>% filter(id %in% str_split(poss1$`Peptide IDs`, ";", simplify = TRUE))
-poss1ModPep <- modPep %>% filter(id %in% str_split(poss1$`Mod. peptide IDs`, ";", simplify = TRUE))
-
-rm(poss1, poss1Pep, poss1ModPep)
-
-############ Protein processing and normalization ############
-length(unique(protGroups[str_split(protGroups$`Protein IDs`, ";", simplify = TRUE)[,2] == "",]$`Protein IDs`)) # 1,243
+############ Protein processing, normalization, and DE ############
+length(unique(protGroups[str_split(protGroups$`Protein IDs`, ";", simplify = TRUE)[,2] == "",]$`Protein IDs`)) # 1,655
 allProts <- unique(c(as.matrix(str_split(protGroups$`Protein IDs`, ";", simplify = TRUE))))
-table(swissprot$Entry %in% allProts)
-prop.table(table(swissprot$Entry %in% allProts))
 
-# Add present vs absent:
-protGroups$presWT <- ifelse(protGroups$`Intensity WT` > 0, TRUE, FALSE)
-protGroups$presHNOX <- ifelse(protGroups$`Intensity HNOX` > 0, TRUE, FALSE)
-xtabs(~presWT + presHNOX, data = protGroups)
+# Removing those not present in at least 2 replicates:
+protDF1 <- protGroups[, names(protGroups) %in% c("Protein IDs") | grepl("Intensity ", names(protGroups))]
+pres <- apply(protDF1[, names(protDF1) != "Protein IDs"], 1, function(x) sum(x > 0)) > 1 # 1,471
+protDF1 <- protDF1[pres, ]
 
-# Normalization and FC for present in both:
-protGroups2 <- protGroups %>% filter(presWT & presHNOX) %>% select(id, `Intensity WT`, `Intensity HNOX`)
-protVsn <- vsn::justvsn(as.matrix(protGroups2[, 2:3]))
-protGroups2$IntWT <- protVsn[,"Intensity WT"]
-protGroups2$IntHNOX <- protVsn[,"Intensity HNOX"]
-protGroups2$FC <- protGroups2$IntHNOX - protGroups2$IntWT
-protGroups2$FCType <- ifelse(protGroups2$FC > 1, "Higher", ifelse(protGroups2$FC < -1, "Lower", "Ind"))
-protFC <- xtabs(~ FCType, data = protGroups2)
+# SampMin imputation:
+protSampMins <- apply(protDF1[, names(protDF1) != "Protein IDs"], 2, function(x) min(x[x > 0]))
+for(j in 2:ncol(protDF1)){
+  protDF1[,j][protDF1[,j] == 0] <- protSampMins[match(names(protDF1)[j], names(protSampMins))]
+}
 
-# Highest FC:
-protGroups3 <- protGroups2 %>% arrange(desc(abs(FC)))
-protGroups3 <- protGroups3[1:5,]
-protGroups4 <- protGroups3 %>% left_join(protGroups[protGroups$id %in% protGroups3$id,])
-protGroups4 <- protGroups4 %>% arrange(FC)
+# VSN:
+protDF2 <- protDF1[, names(protDF1) != "Protein IDs"]
+rownames(protDF2) <- protDF1$`Protein IDs`
+protDF3 <- vsn::justvsn(as.matrix(protDF2))
+vsn::meanSdPlot(protDF3)
+protDF3 <- as.data.frame(protDF3)
+protDF3$`Protein IDs` <- rownames(protDF3)
+
+# Some transformations:
+protDF1L <- protDF1 %>% gather(key = "Sample", value = "intensity", -`Protein IDs`)
+protDF1L$Sample <- gsub("Intensity ", "", protDF1L$Sample)
+protDF1L$intensity <- log2(protDF1L$intensity)
+
+protDF3L <- protDF3 %>% gather(key = "Sample", value = "intensity", -`Protein IDs`)
+protDF3L$Sample <- gsub("Intensity ", "", protDF3L$Sample)
+
+# Plot intensity distributions:
+ggplot(protDF1L, aes(y = intensity, x = Sample)) + geom_boxplot() + ylim(0, 35)
+ggplot(protDF3L, aes(y = intensity, x = Sample)) + geom_boxplot() + ylim(0, 35)
+
+# Limma Fold Change differences:
+protDF3$`Protein IDs` <- NULL
+des1 <- model.matrix(~ 0 + factor(c(rep(1, 2), rep(2, 2))))
+colnames(des1) <- c("hnox", "wt")
+des1c <- limma::makeContrasts(hnox - wt, levels = des1)
+protFit0 <- limma::lmFit(protDF3[,c(2,3,4,6)], design = des1)
+protFit0 <- limma::eBayes(protFit0)
+protFit1 <- limma::eBayes(limma::contrasts.fit(protFit0, des1c))
+protDE <- data.frame(log2FC = protFit1$coefficients[,1], pValue = protFit1$p.value[,1])
+protDE$protID <- rownames(protDE)
+protDE$qValue <- qvalue::qvalue(protDE$pValue)$qvalues
+
+# Volcano plot:
+ggplot(protDE, aes(x = log2FC, y = -log10(qValue))) + geom_point() + 
+  geom_hline(yintercept = -log10(.05), color = "red", lty = 2, lwd = 2)
+
+# PCA:
+protPCA <- prcomp(t(protDF3), center = TRUE, scale = TRUE)
+protPCAx <- as.data.frame(protPCA$x[,1:3])
+protPCAx$Sample <- gsub("Intensity ", "", rownames(protPCAx))
+protPCAx$Phenotype <- gsub("\\d", "", protPCAx$Sample)
+ggplot(protPCAx, aes(x = PC1, y = PC2, color = Phenotype, label = Sample)) + geom_point() + geom_text_repel()
+
+# Sensitivty analysis
+protPCA2 <- prcomp(t(protDF3[,-1]), center = TRUE, scale = TRUE)
+protPCAx2 <- as.data.frame(protPCA2$x[,1:3])
+protPCAx2$Sample <- gsub("Intensity ", "", rownames(protPCAx2))
+protPCAx2$Phenotype <- gsub("\\d", "", protPCAx2$Sample)
+ggplot(protPCAx2, aes(x = PC1, y = PC2, color = Phenotype, label = Sample)) + geom_point() + geom_text_repel()
+
+ggplot(protDF3, aes(x = `Intensity hnox1`, y = `Intensity hnox2`)) + geom_point()
+ggplot(protDF3, aes(x = `Intensity hnox3`, y = `Intensity hnox2`)) + geom_point()
+ggplot(protDF3, aes(x = `Intensity hnox1`, y = `Intensity wt1`)) + geom_point()
+cor(protDF3$`Intensity hnox1`, protDF3$`Intensity hnox2`)
+cor(protDF3$`Intensity hnox3`, protDF3$`Intensity hnox2`)
+cor(protDF3$`Intensity hnox1`, protDF3$`Intensity wt1`)
+idk <- cor(protDF3)
+diag(idk) <- .8
+corrplot::corrplot(idk, cl.lim = c(0.75, .87), is.corr = FALSE, diag = FALSE, type = "lower")
 
 # Get peptides for those:
 pG3pep <- peptides[peptides$id %in% do.call("c", sapply(protGroups[protGroups$id %in% protGroups3$id,]$`Peptide IDs`, function(x) str_split(x, ";"))),]

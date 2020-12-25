@@ -99,4 +99,4 @@ corrplot::corrplot(cor(t(df1w)))
 
 plot(as.numeric(df1w[4,]), as.numeric(df1w[5,]))
 plot(as.numeric(df1w[5,]), as.numeric(df1w[6,]))
-plot(as.numeric(df1w[4,]), as.numeric(df1w[6,]))
+plot(as.numeric(df1w[4,]), as.numeric(df1w[6,]), ylim = c(0, 14))

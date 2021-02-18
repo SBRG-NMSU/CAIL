@@ -199,34 +199,6 @@ for(i in 1:length(profList)){
   print(i)
 }
 
-############ Pubchem online MetFrag queries ############
-# profList <- profInfo2$profile_ID
-# for(i in 1:length(profList)){
-#   profID <- profList[i]
-#   
-#   # Which MSMS from list object:
-#   whichMSMS <- profInfo2$msmsMatchU[profInfo2$profile_ID == profID]
-#   
-#   # Write temp .txt file with MS/MS data:
-#   write.table(msmsData2[[whichMSMS]]$MSMS, file = paste0(baseDir2, "/msmsPeaks/prof_", profID, ".txt"), 
-#               col.names = FALSE, row.names = FALSE, sep = "\t")
-#   
-#   # Write configuration file for MetFrag:
-#   profMZ <- profInfo2$profile_mean_mass[profInfo2$profile_ID == profID]
-#   profAdduct <- profInfo2$metFragAdduct[profInfo2$profile_ID == profID]
-#   ReSOLUTION::MetFragConfig(mass = profMZ, adduct_type = profAdduct, 
-#                             results_filename = paste0("prof_", profID),
-#                             peaklist_path = paste0(baseDir2, "/msmsPeaks/prof_", profID, ".txt"), 
-#                             base_dir = paste0(baseDir2, "/metFragOut"), ppm = 2,
-#                             mzabs = 0.05, frag_ppm = 100, output = "CSV")
-#   
-#   # MetFrag call:
-#   runMetFragMy(paste0(baseDir2, "/metFragOut/config/prof_", profID, "_config.txt"), 
-#                MetFrag_dir = "C:/Program Files/metfrag/", CL_name = "MetFrag2.4.5-CL.jar")
-#   
-#   print(i)
-# }
-
 ############ Import MetFrag results ############
 load("working_20200803.RData")
 

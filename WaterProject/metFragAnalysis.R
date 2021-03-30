@@ -108,6 +108,7 @@ adductMatch <- data.frame(enviMassForm = c("M+H", "M+NH4", "M+Na", "M+K"),
 profInfo2 <- profInfo2 %>% left_join(adductMatch, by = c("adduct"="enviMassForm"))
 
 save.image("working_20200803.RData")
+load("working_20200803.RData")
 
 ############ Modified Run MetFrag code ############
 runMetFragMy <-function (config_file, MetFrag_dir, CL_name, config_dir = dirname(config_file)) {
@@ -165,7 +166,7 @@ compTox$InChIKey3 <- InChIKeyTemp[,3]
 compTox$InChI <- str_split(compTox$InChI, "\n", simplify = TRUE)[,1]
 
 csvFile <- "C:/Users/ptrainor/Documents/GitHub/cail/WaterProject/CompTox.csv"
-write.csv(compTox, csvFile, na = "", row.names = FALSE)
+# write.csv(compTox, csvFile, na = "", row.names = FALSE)
 
 # Base directory:
 baseDir2 <- "C:/Users/ptrainor/Documents/GitHub/cail/WaterProject"
@@ -198,9 +199,10 @@ for(i in 1:length(profList)){
   
   print(i)
 }
+save.image("working_20200803b.RData")
 
 ############ Import MetFrag results ############
-load("working_20200803.RData")
+load("working_20200803b.RData")
 
 # Get all the file names from the directory:
 fNames1 <- list.files('metFragOut2/results/')

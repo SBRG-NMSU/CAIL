@@ -2,8 +2,8 @@
 options(stringsAsFactors = FALSE, scipen = 900)
 oldPar <- par()
 os <- Sys.info()["sysname"]
-baseDir <- ifelse(os == "Windows", "C:/Users/ptrainor/gdrive/CAIL/YuklProt3/", 
-                  "~/gdrive/CAIL/YuklProt3/")
+baseDir <- ifelse(os == "Windows", "C:/Users/ptrainor/gdrive/CAIL/YuklProt4/", 
+                  "~/gdrive/CAIL/YuklProt4/")
 setwd(baseDir)
 
 library(tidyverse)
@@ -13,34 +13,42 @@ theme_set(theme_bw())
 theme_update(plot.title = element_text(hjust = 0.5))
 
 ############ Import and process text files ############
-allPeptides <- read.delim("txt/allPeptides.txt", check.names = FALSE)
-peptides <- read.delim("txt/peptides.txt", check.names = FALSE)
-evidence <- read.delim("txt/evidence.txt", check.names = FALSE)
-protGroups <- read.delim("txt/proteinGroups.txt", check.names = FALSE)
-msmsScan <- read.delim("txt/msmsScans.txt", check.names = FALSE)
-msms <- read.delim("txt/msms.txt", check.names = FALSE)
-modPep <- read.delim("txt/modificationSpecificPeptides.txt", check.names = FALSE)
+# allPeptides <- read.delim("txt/allPeptides.txt", check.names = FALSE)
+# peptides <- read.delim("txt/peptides.txt", check.names = FALSE)
+# evidence <- read.delim("txt/evidence.txt", check.names = FALSE)
+# protGroups <- read.delim("txt/proteinGroups.txt", check.names = FALSE)
+# msmsScan <- read.delim("txt/msmsScans.txt", check.names = FALSE)
+# msms <- read.delim("txt/msms.txt", check.names = FALSE)
+# modPep <- read.delim("txt/modificationSpecificPeptides.txt", check.names = FALSE)
+# save.image("txt/txtData.RData")
+load("txt/txtData.RData")
 
 ############ Protein processing, normalization, and DE ############
-length(unique(protGroups[str_split(protGroups$`Protein IDs`, ";", simplify = TRUE)[,2] == "",]$`Protein IDs`)) # 1,381
+length(unique(protGroups[str_split(protGroups$`Protein IDs`, ";", simplify = TRUE)[,2] == "",]$`Protein IDs`)) # 1,058
 allProts <- unique(c(as.matrix(str_split(protGroups$`Protein IDs`, ";", simplify = TRUE))))
 
-# Removing those not present in at least 2 replicates and not present in 2 pooled:
+## Filtering
+# Removing those not present in at least 2 replicates and not present in 1 pooled:
 protDF1 <- protGroups[, names(protGroups) %in% c("Protein IDs") | grepl("Intensity ", names(protGroups))]
 pres <- apply(protDF1[, names(protDF1) != "Protein IDs"], 1, function(x) sum(x > 0)) > 1 
-table(pres) # 1,285 pres vs 111
+table(pres) # 991 pres vs 77
 protDF1 <- protDF1[pres, ]
-pres <- apply(protDF1[, grepl("pool", names(protDF1))], 1, function(x) sum(x > 0)) > 1
-table(pres) # 1,085 pres vs 200
+pres <- apply(protDF1[, grepl("pool", names(protDF1))], 1, function(x) sum(x > 0)) > 0
+table(pres) # 695 pres vs 296 # Should follow up on some of these
 protDF1 <- protDF1[pres, ]
+
+## Filtering con and reverse:
+protDF1 <- protDF1 %>% filter(!`Protein IDs` %in% protDF1$`Protein IDs`[grepl("CON_", protDF1$`Protein IDs`)]) # 695 -> 694
+protDF1 <- protDF1 %>% filter(!`Protein IDs` %in% protDF1$`Protein IDs`[grepl("REV_", protDF1$`Protein IDs`)]) # 694 -> 693
 
 # SampMin imputation:
-protSampMins <- apply(protDF1[, names(protDF1) != "Protein IDs"], 2, function(x) min(x[x > 0]))
-for(j in 1:length(protSampMins)){
-  protDF1[,names(protSampMins)[j]][protDF1[,names(protSampMins)[j]] == 0] <- protSampMins[j]
+protSampMins <- apply(protDF1[, names(protDF1) != "Protein IDs"], 1, function(x) min(x[x > 0]))
+protSampMinsDiv2 <- protSampMins / 2
+for(i in 1:nrow(protDF1)){
+  protDF1[i, names(protDF1) != "Protein IDs"][protDF1[i, names(protDF1) != "Protein IDs"] == 0] <- protSampMinsDiv2[i]
 }
 
-# VSN:
+# VSN: # Why use VSN? https://academic.oup.com/bib/article/19/1/1/2562889
 protDF2 <- protDF1[, names(protDF1) != "Protein IDs"]
 rownames(protDF2) <- protDF1$`Protein IDs`
 protDF3 <- vsn::justvsn(as.matrix(protDF2))
@@ -93,6 +101,15 @@ cor(protDF3$`Intensity hnox1`, protDF3$`Intensity wt1`)
 idk <- cor(protDF3)
 diag(idk) <- .8
 corrplot::corrplot(idk, is.corr = FALSE, diag = FALSE, type = "lower", method = "color", addCoef.col = "black")
+
+# Join annotation data with DE data:
+protDE$`Protein IDs` <- rownames(protDE)
+protDE <- protDE %>% left_join(
+  protGroups %>% select(`Protein IDs`:`Number of proteins`, `Sequence coverage [%]`, `Sequence length`, `Q-value`))
+
+############ Peptides for some top proteins ############
+protDETop <- protDE %>% filter(qValue < .05)
+
 
 ############ Peptide processing and normalization ############
 peptides2 <- as.data.frame(peptides[, names(peptides) == "id" | grepl("Intensity", names(peptides))])

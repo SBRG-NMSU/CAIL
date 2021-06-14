@@ -151,6 +151,9 @@ protDE$ProtName <- unite(as.data.frame(str_split(str_split(protDE$`Fasta headers
                                                     "\\|", simplify = TRUE)[,c(1,3)]), "ProtName")[,1]
 protDE$ProtName <- gsub("_PARDP", "", protDE$ProtName)
 
+# Export data.frame:
+writexl::write_xlsx(protDE,"Results/ProtDE.xlsx")
+
 ############ Peptides for some top proteins ############
 protDETop <- protDE %>% filter(qValue < .10)
 protDETop <- protDETop %>% arrange(pValue)

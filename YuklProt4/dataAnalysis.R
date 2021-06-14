@@ -14,12 +14,15 @@ theme_update(plot.title = element_text(hjust = 0.5))
 
 ############ Import and process text files ############
 # allPeptides <- read.delim("txt/allPeptides.txt", check.names = FALSE)
+# allPeptides$id_allPeptides <- 1:nrow(allPeptides)
 # peptides <- read.delim("txt/peptides.txt", check.names = FALSE)
 # evidence <- read.delim("txt/evidence.txt", check.names = FALSE)
 # protGroups <- read.delim("txt/proteinGroups.txt", check.names = FALSE)
 # msmsScan <- read.delim("txt/msmsScans.txt", check.names = FALSE)
 # msms <- read.delim("txt/msms.txt", check.names = FALSE)
 # modPep <- read.delim("txt/modificationSpecificPeptides.txt", check.names = FALSE)
+# matchedFeatures <- read.delim("txt/matchedFeatures.txt", check.names = FALSE)
+# depPeptides <- read.delim("txt/dependentPeptides.txt", check.names = FALSE)
 # save.image("txt/txtData.RData")
 load("txt/txtData.RData")
 
@@ -109,6 +112,13 @@ protDE <- protDE %>% left_join(
 
 ############ Peptides for some top proteins ############
 protDETop <- protDE %>% filter(qValue < .05)
+pepDETop1 <- peptides %>% filter(Proteins == protDETop$protID[1])
+pepDETop1_1 <- pepDETop1 %>% filter(Sequence == "VGLLDADIYGPSQPR")
+evidenceTop1_1 <- evidence %>% filter(id == 27128)
+pepDETop2 <- allPeptides %>% filter(`m/z` < 800.9362 & `m/z` > 800.9040 & `Retention time` > 31.0 & `Retention time` < 32.10)
+
+## Look at VGLLDADIYGPSQPR, it has m/z = 800.925, it is present in WT and H-NOX
+## But only reported in H-NOX. See scan 8286 in WT2 versus scan 8994 in hnox2
 
 
 ############ Peptide processing and normalization ############

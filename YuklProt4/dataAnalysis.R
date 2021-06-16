@@ -132,6 +132,35 @@ png(filename = "Plots/corMat.png", height = 5, width = 5, units = "in", res = 30
 corrplot::corrplot(corMat, is.corr = FALSE, diag = TRUE, method = "color", addCoef.col = "black", number.cex = .65)
 dev.off()
 
+# Protein-level QC CV's:
+poolCVs <- list()
+for(i in 1:nrow(protDF3)){
+  temp1 <- 2^unlist(protDF3[i, grepl("Pool", names(protDF3))])
+  temp2 <- unlist(protDF2[i, grepl("pool", names(protDF2))])
+  poolCVs[[i]] <- data.frame(Mean = mean(temp1), CV = sd(temp1) / mean(temp1) * 100, 
+                             Mean0 = mean(temp2), CV0 = sd(temp2) / mean(temp2) * 100)
+}
+poolCVDF <- do.call("rbind", poolCVs)
+poolCVDF <- poolCVDF %>% select(-Mean0) %>% pivot_longer(!Mean, names_to = "Normalized", values_to = "Value")
+poolCVDF$Normalized[poolCVDF$Normalized == "CV0"] <- "No"
+poolCVDF$Normalized[poolCVDF$Normalized == "CV"] <- "Yes"
+
+# Histogram
+png(filename = "Plots/cvHist.png", height = .75 * 4.25, width = .75 * 6, units = "in", res = 600)
+ggplot(poolCVDF, aes(x = Value, fill = Normalized)) + geom_histogram(color = "grey80", position = "identity", alpha = .65, bins = 40) + 
+  xlab("Coefficient of variation (%)") + ylab('Frequency') + theme_bw()
+dev.off()
+
+# Mean dependence
+png(filename = "Plots/cvMean.png", height = 4.25, width = 5, units = "in", res = 600)
+ggplot(poolCVDF %>% filter(Normalized == "Yes"), aes(x = log2(Mean), y = Value)) + 
+  xlab("Mean") + ylab("Coefficient of variation (%)") +
+  geom_point(color = "grey50", fill = "dodgerblue", pch = 21) + stat_smooth(method = "lm", se = FALSE, color = "darkred")
+dev.off()
+
+# Summary:
+poolCVDF %>% group_by(Normalized) %>% summarize(q1 = quantile(Value, probs = .25), Median = median(Value), q3 = quantile(Value, probs = .75))
+
 # Heatmap:
 png(filename = "Plots/heatmap_noLab.png", height = 8, width = 6, units = "in", res = 300)
 pheatmap::pheatmap(as.matrix(protDF3), scale = "row", show_rownames = FALSE)
